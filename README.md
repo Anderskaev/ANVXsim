@@ -3,7 +3,7 @@
 [![Build and Deploy](https://github.com/Anderskaev/ANVXsim/actions/workflows/deploy-backend.yml/badge.svg)](https://github.com/Anderskaev/ANVXsim/actions/workflows/deploy-backend.yml)
 [![Build and Deploy](https://github.com/Anderskaev/ANVXsim/actions/workflows/deploy-frontend.yml/badge.svg)](https://github.com/Anderskaev/ANVXsim/actions/workflows/deploy-frontend.yml)
 
- **AN**derskaev **V**lad e**X**change simulator (ANVXsim)
+# **AN**derskaev **V**lad e**X**change simulator (ANVXsim)
 
 stack: Flask MySQL MySQLAlchemy React
 
