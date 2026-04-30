@@ -235,6 +235,25 @@ CREATE TABLE IF NOT EXISTS accruals (
   COMMENT='История начисленных дивидендов и купонов';
 
 
+-- ------------------------------------------------------------
+--  Токен
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id          INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+    user_id     INT UNSIGNED    NOT NULL,
+    token_hash  VARCHAR(255)    NOT NULL COMMENT 'hash от токена, не сам токен',
+    expires_at  TIMESTAMP       NOT NULL,
+    created_at  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    revoked_at  TIMESTAMP       NULL     COMMENT 'NULL = активен',
+
+    PRIMARY KEY (id),
+    KEY idx_token_hash (token_hash),
+    KEY idx_user_id    (user_id),
+    CONSTRAINT fk_rt_user
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================
 --  ВОССТАНАВЛИВАЕМ ПРОВЕРКУ FK
 -- ============================================================
