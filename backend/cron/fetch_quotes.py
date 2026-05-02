@@ -34,7 +34,7 @@ def fetch_board(engine, market, board, sec_type):
         'iss.meta':           'off',
         'iss.only':           'securities,marketdata',
         'securities.columns': 'SECID,SHORTNAME,SECNAME,LOTSIZE,ISIN,CURRENCYID',
-        'marketdata.columns': 'SECID,LAST,OPEN,HIGH,LOW,VOLTODAY,LASTTOPREVPRICE',
+        'marketdata.columns': 'SECID,LAST,OPEN,HIGH,LOW,VOLTODAY,LASTTOPREVPRICE,CHANGE',
     }
     try:
         r = requests.get(url, params=params, timeout=15)
@@ -80,7 +80,7 @@ def process_board(data, sec_type):
 
         # ── определяем цену ──────────────────────────────────
         # если LAST равен null — берём цену закрытия предыдущего дня
-        price = md.get('LAST') or md.get('LASTTOPREVPRICE')
+        price = md.get('LAST') # or md.get('LASTTOPREVPRICE')
         if not price:
             continue  # бумага без цены вообще — пропускаем
 
@@ -88,7 +88,7 @@ def process_board(data, sec_type):
         # prev = md.get('LASTTOPREVPRICE')
         # if prev and prev != 0:
         #     change_pct = round((float(price) / float(prev) - 1) * 100, 4)
-        change_pct = md.get('CHANGE')            
+        # change_pct = md.get('CHANGE')            
 
         # ── upsert last_price ─────────────────────────────────
         lp = LastPrice.query.filter_by(ticker=ticker).first()
@@ -96,12 +96,12 @@ def process_board(data, sec_type):
             lp = LastPrice(ticker=ticker)
             db.session.add(lp)
 
-        lp.price      = price
+        lp.price      = md.get('LAST')
         lp.open       = md.get('OPEN')
         lp.high       = md.get('HIGH')
         lp.low        = md.get('LOW')
         lp.volume     = md.get('VOLTODAY')
-        lp.change_pct = change_pct
+        lp.change_pct = md.get('LASTTOPREVPRICE') 
         lp.fetched_at = datetime.utcnow()
 
 
