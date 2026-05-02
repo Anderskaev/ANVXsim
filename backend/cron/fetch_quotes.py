@@ -84,10 +84,11 @@ def process_board(data, sec_type):
         if not price:
             continue  # бумага без цены вообще — пропускаем
 
-        change_pct = None
-        prev = md.get('LASTTOPREVPRICE')
-        if prev and prev != 0:
-            change_pct = round((float(price) / float(prev) - 1) * 100, 4)
+        # change_pct = None
+        # prev = md.get('LASTTOPREVPRICE')
+        # if prev and prev != 0:
+        #     change_pct = round((float(price) / float(prev) - 1) * 100, 4)
+        change_pct = md.get('CHANGE')            
 
         # ── upsert last_price ─────────────────────────────────
         lp = LastPrice.query.filter_by(ticker=ticker).first()
