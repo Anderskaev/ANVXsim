@@ -39,7 +39,7 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./frontend/anvx/build/
+          local-dir: ./frontend/anvx/dist/
           server-dir: /anvx.anderskaev.ru/public/
           exclude: |
             README.md
