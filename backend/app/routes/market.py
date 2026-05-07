@@ -4,8 +4,11 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 import requests
 from datetime import date, timedelta
+from itertools import groupby
 
-from app import db
+from requests_ratelimiter import LimiterSession
+
+from app import db, cache
 from app.models import Security, LastPrice, Candle, Dividend, Coupon
 
 market_bp = Blueprint('market', __name__)
@@ -20,6 +23,17 @@ TIMEFRAME_DAYS = {
     '6М': 180,
 }
 
+TIMEFRAME_ISS = {
+    '1м': 1,
+    '10м': 10,
+    '1Ч': 60,
+    '1Д': 24,
+    '1Н': 7,
+    '1М': 31,
+    '1К': 4
+}
+
+session = LimiterSession(per_second=5)  # не более 5 запросов в секунду к ISS
 
 # ── MARKET LIST ───────────────────────────────────────────────────────────────
 
@@ -141,6 +155,33 @@ def security(ticker):
 
 # ── CHART ─────────────────────────────────────────────────────────────────────
 
+def aggregate_candles(candles, tf):
+    if tf == '1Н':
+        key_fn = lambda c: c.date.isocalendar()[:2]
+    elif tf == '1М':
+        key_fn = lambda c: (c.date.year, c.date.month)
+    elif tf == '3М':
+        key_fn = lambda c: (c.date.year, (c.date.month - 1)//3)
+    elif tf == '6М':
+        key_fn = lambda c: (c.date.year, (c.date.month - 1)//6)       
+    else:
+        return [c.to_dict() for c in candles]                
+    
+    result = []
+    for _, group in groupby(candles, key=key_fn):
+        group = list(group)
+        result.append({
+            'date': group[0].date.isoformat(),
+            'open': float(group[0].open),
+            'high': max(float(c.high) for c in group),
+            'low':  min(float(c.high) for c in group),
+            'close': float(group[-1].close),
+            'volume': sum(c.volume for c in group)
+        })
+    return result
+
+
+
 @market_bp.route('/chart/<ticker>', methods=['GET'])
 @jwt_required()
 def chart(ticker):
@@ -151,6 +192,7 @@ def chart(ticker):
     limit = min(limit, 60)
 
     days = TIMEFRAME_DAYS.get(tf)
+
     if not days:
         return jsonify({'error': f'Неверный таймфрейм. Допустимые: {list(TIMEFRAME_DAYS.keys())}'}), 400
 
@@ -158,23 +200,84 @@ def chart(ticker):
     if not sec:
         return jsonify({'error': 'Бумага не найдена'}), 404
 
-    date_from = date.today() - timedelta(days=days)
+    date_from = date.today() - timedelta(days=limit*days)
 
     candles = Candle.query.filter(
         Candle.ticker == ticker.upper(),
         Candle.date   >= date_from,
-    ).order_by(Candle.date.desc()).limit(limit).all()
+    ).order_by(Candle.date.desc()).limit(limit*days).all()
 
     # возвращаем в хронологическом порядке
     candles = list(reversed(candles))
 
-    return jsonify({
-        'ticker':  ticker.upper(),
-        'tf':      tf,
-        'candles': [c.to_dict() for c in candles],
-    }), 200
+    if tf == '1Д':
+        result = [c.to_dict() for c in candles[-limit:]]
+        return jsonify({'ticker': ticker.upper(), "tf": tf, "candles": result}), 200
+            
+    result = aggregate_candles(candles, tf)[-limit:]
+    return jsonify({'ticker': ticker.upper(), "tf": tf, "candles": result}), 200
 
 
+# ── CHART2 (from ISS ) ────────────────────────────────────────────────────────
+@market_bp.route('/chart2/<ticker>')
+@jwt_required()
+@cache.cached(timeout=60, query_string=True)
+def chart2(ticker):
+    
+    # limit = request.args.get('limit', 30,    type=int)
+    tf    = request.args.get('tf',    '10',  type=str)
+    start_date = request.args.get('start_date', None, type=str)
+    end_date = request.args.get('end_date', None, type=str)
+
+    # limit=min(limit,60)
+
+    interval = TIMEFRAME_ISS.get(tf)
+    if not interval:
+        return jsonify({'error': f'Неверный таймфрейм. Допустимые: {list(TIMEFRAME_ISS.keys())}'}), 400
+
+    params = {"interval": interval, "iss.meta": 'off'}
+    if start_date: params['from'] = start_date
+    if end_date:   params['till'] = end_date
+
+    sec = Security.query.filter_by(ticker=ticker.upper(), is_active=True).first()
+    if not sec:
+        return jsonify({'error': 'Бумага не найдена'}), 404
+
+    market_map = {
+        'share':    'shares',
+        'etf':      'shares',
+        'bond':     'bonds',
+        'currency': 'currency',
+    }
+    market_name = market_map.get(sec.type, 'shares')    
+
+    url = (
+        f'{ISS_BASE}/engines/stock/markets/{market_name}'
+        f'/boards/{sec.board}/securities/{ticker.upper()}/candles.json'
+    )    
+
+    try:
+        r = session.get(url, params=params, timeout=10)
+        r.raise_for_status()
+        data    = r.json()
+        columns = data['candles']['columns']
+        rows    = data['candles']['data']
+        
+        if 'begin' in columns:
+            indx = columns.index('begin')
+            columns[indx] = "date"
+
+        return jsonify({
+            'ticker': ticker.upper(),
+            'tf': tf,
+            'candles': [dict(zip(columns, row)) for row in rows]
+        }), 200
+
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'ISS не отвечает, попробуйте позже'}), 503
+    except Exception as e:
+        return jsonify({'error': f'Ошибка получения свечей: {url}{str(e)}'}), 503
+    
 # ── ORDERBOOK ─────────────────────────────────────────────────────────────────
 # Платно от MOEX. Пока пусть висит
 # @market_bp.route('/orderbook/<ticker>', methods=['GET'])

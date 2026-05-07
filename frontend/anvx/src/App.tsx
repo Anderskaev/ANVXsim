@@ -1,42 +1,101 @@
-import { Button } from "@/components/ui/button"
+//import { AuthLayout } from "./layouts/auth-layout"
+import { Login } from "./pages/login"
+import { Register } from "./pages/register"
+
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
+import { useAuthStore } from "./store/auth.store"
+import { Market } from "./pages/market"
+
+import api from '@/lib/axios'
+import { useEffect, useState } from "react"
+
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+  Item,
+  ItemContent,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item"
+import { Spinner } from "@/components/ui/spinner"
+
+function AuthLayout({ children }: { children: React.ReactNode }) {
+  const isAuth = useAuthStore((s) => s.isAuth)
+  if (!isAuth) {
+    return (
+      <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10" >
+        <div className="w-full max-w-sm">
+          {children}
+        </div>
+      </div >
+    )
+  }
+  else {
+    return <Navigate to="/market" replace />
+  }
+}
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const isAuth = useAuthStore((s) => s.isAuth)
+  return isAuth ? <>{children}</> : <Navigate to="/login" replace />
+}
 
 export function App() {
+  const setAuth = useAuthStore((s) => s.setAuth)
+  const logout = useAuthStore((s) => s.logout)
+  const [isRestoring, setIsRestoring] = useState(true)
+
+  useEffect(() => {
+    const restoreSession = async () => {
+      const accessToken = localStorage.getItem('access_token')
+      if (!accessToken) {
+        setIsRestoring(false)
+        return
+      }
+
+      try {
+        const { data } = await api.get('/auth/me')
+        setAuth(data.user, data.portfolio)
+      } catch {
+        logout()
+      } finally {
+        setIsRestoring(false)
+      }
+
+    }
+    restoreSession()
+  }, [])
+
+  if (isRestoring) {
+    return (
+      (
+        <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10" >
+          <div className="w-full max-w-sm">
+            <div className="flex w-full max-w-xs flex-col gap-4 [--radius:1rem]">
+              <Item variant="muted">
+                <ItemMedia>
+                  <Spinner />
+                </ItemMedia>
+                <ItemContent>
+                  <ItemTitle className="line-clamp-1">Loading...</ItemTitle>
+                </ItemContent>
+              </Item>
+            </div>
+          </div></div >
+      )
+    )
+  }
+
   return (
-    <div className="flex min-h-svh p-6">
-      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">
-        <div>
-          <h1 className="font-medium">Project ready!</h1>
-          <p>You may now add components and start building.</p>
-          <p>We&apos;ve already added the button component for you.</p>
-          <Button className="mt-2">Button</Button>
-        </div>
-        <Card className="group/card flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground ring-1 ring-foreground/10 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl w-full max-w-sm">
-          <CardHeader >
-            <CardTitle>Card Title</CardTitle>
-            <CardDescription>Card Description</CardDescription>
-            <CardAction>Card Action</CardAction>
-          </CardHeader>
-          <CardContent>
-            <p>Card Content</p>
-          </CardContent>
-          <CardFooter className="flex items-center rounded-b-xl border-t bg-muted/50 p-4 group-data-[size=sm]/card:p-3 flex-col gap-2">
-            <p>Card Footer</p>
-          </CardFooter>
-        </Card>
-        <div className="font-mono text-xs text-muted-foreground">
-          (Press <kbd>d</kbd> to toggle dark mode)
-        </div>
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+
+        <Route path="/login" element={<AuthLayout><Login /></AuthLayout>} />
+        <Route path="/register" element={<AuthLayout><Register /></AuthLayout>} />
+
+        <Route path="/market" element={<ProtectedRoute><Market /></ProtectedRoute>} />
+
+        <Route path="*" element={<Navigate to="/market" replace />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
