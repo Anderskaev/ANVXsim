@@ -5,6 +5,9 @@ import { defineConfig } from "vite"
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    chunkSizeWarningLimit: 1000, // Порог в 1000 КБ вместо 500
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
