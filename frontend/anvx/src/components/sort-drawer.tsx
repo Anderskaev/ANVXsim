@@ -13,6 +13,7 @@ import {
     DrawerHeader,
     DrawerTitle,
     DrawerTrigger,
+    DrawerPortal
 } from '@/components/ui/drawer'
 import type { SortColumn } from '@/store/ui.store'
 
@@ -55,7 +56,7 @@ export function SortDrawer() {
 
     return (
         <Drawer open={open} onOpenChange={handleOpen}>
-            <DrawerTrigger asChild onFocus={(e) => e.preventDefault()}>
+            <DrawerTrigger asChild>
                 <Button
                     variant={isActive ? 'default' : 'outline'}
                     size="sm"
@@ -70,7 +71,7 @@ export function SortDrawer() {
                     )}
                 </Button>
             </DrawerTrigger>
-
+            <DrawerPortal>
             <DrawerContent>
                 <DrawerHeader className="flex items-center justify-between">
                     <DrawerTitle>Сортировка</DrawerTitle>
@@ -137,6 +138,7 @@ export function SortDrawer() {
                 </DrawerFooter>
 
             </DrawerContent>
+            </DrawerPortal>
         </Drawer>
     )
 }

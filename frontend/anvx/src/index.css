@@ -149,9 +149,9 @@
   font-weight: 500;
 }
 
-.port-card {
-  background: linear-gradient(150deg, var(--muted-foreground) 0%, var(--background) 50%, var(--muted-foreground) 100%);
-}
+ .port-card {
+  /* background: linear-gradient(150deg, var(--muted-foreground) 0%, var(--background) 70%, var(--muted-foreground) 90%); */
+}  
 
 .port-label {
   font-size: 10px;

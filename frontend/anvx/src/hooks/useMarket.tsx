@@ -60,14 +60,7 @@ export function useMarket() {
     } else if (!dir) {
       setMarketSort(col, 'asc')  
     } else setMarketSort(col, dir)  
-   
-    //  if (sortCol === col) {
-    //    setSortDir((d) => d === 'asc' ? 'desc' : 'asc')
-    //  } else {
-    //    setSortCol(col)
-    //    setSortDir('desc')
-    //  }
-  
+ 
   }
 
   return { ...query, sortCol, sortDir, handleSort }

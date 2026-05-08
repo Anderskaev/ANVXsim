@@ -15,8 +15,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { SortDrawer } from '@/components/sort-drawer'
 import type { SortColumn } from '@/store/ui.store'
+import { usePortfolio } from '@/hooks/usePortfolio'
+import { cn } from '@/lib/utils'
+import { Separator } from '@/components/ui/separator'
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
 
@@ -27,12 +36,10 @@ const TYPE_FILTERS = [
   { value: 'etf', label: 'ETF' },
 ]
 
-
-
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 
-const fmtPrice = (n: number | null) =>
-  n == null ? '—' : n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmtPrice = (n: number | null | undefined) =>
+  n == null || n === undefined ? '—' : n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const fmtVolume = (n: number | null) => {
   if (n == null) return '—'
@@ -41,10 +48,17 @@ const fmtVolume = (n: number | null) => {
   return n.toString()
 }
 
+const fmtBadge = (value: number | null | undefined) => {
+  if (value == null || value === undefined) return ""
+  const positive = value >= 0
+  if (positive) return `+${value.toFixed(2)}`
+  return `${value.toFixed(2)}`
+}
+
 // ── CHANGE BADGE ──────────────────────────────────────────────────────────────
 
-function ChangeBadge({ value }: { value: number | null }) {
-  if (value == null) return <span className="text-muted-foreground">—</span>
+function ChangeBadge({ value }: { value: number | null | undefined }) {
+  if (value == null || value === undefined) return <span className="text-muted-foreground">—</span>
   const positive = value >= 0
   return (
     <Badge variant={positive ? 'default' : 'destructive'}
@@ -223,6 +237,8 @@ export function Market2() {
     handleSort,
   } = useMarket()
 
+  const { data: portfolioData } = usePortfolio()
+
   // flatten pages
   const sorted = data?.pages.flatMap((p) => p.items) ?? []
 
@@ -247,6 +263,33 @@ export function Market2() {
     <div className="p-4 md:p-6 space-y-4">
 
       {/* заголовок */}
+
+      {isMobile && (
+        <>
+          <Card className="port-card">
+            <CardHeader>
+              <CardTitle className="port-label">
+                Стоимость портфеля
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="port-total">₽ {fmtPrice(portfolioData?.total_value)}</div>
+              <div className="port-pnl">
+
+                <span className={cn(`pnl-badge`, portfolioData && portfolioData?.roi < 0 ? 'dn' : 'up')}>{fmtBadge(portfolioData?.roi)}%</span>
+                <span className={cn(`pnl-badge`, portfolioData && portfolioData?.total_pnl < 0 ? 'dn' : 'up')}>{fmtBadge(portfolioData?.total_pnl)}</span>
+              </div>
+              <Separator className="my-4" />
+              <div className="flex h-5 items-center justify-center gap-4 text-sm">            
+                <div className="port-cash">Наличные: {fmtPrice(portfolioData?.portfolio.cash)}&nbsp;₽</div>
+                <Separator orientation="vertical" />
+                <div className="port-cash">Ценные бумаги: {fmtPrice(portfolioData?.pos_value)}</div>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
       <div>
         <h1 className="text-xl font-bold">Рынок</h1>
         {data && (
@@ -258,7 +301,7 @@ export function Market2() {
 
       {/* фильтры */}
       <Filters />
-      
+
       {isMobile && (
         <SortDrawer />
       )}

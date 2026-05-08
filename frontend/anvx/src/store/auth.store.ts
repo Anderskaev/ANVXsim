@@ -1,13 +1,13 @@
 import { create } from 'zustand'
 
-interface User {
+export interface User {
   id:         number
   email:      string
   name:       string
   avatar_url: string | null
 }
 
-interface Portfolio {
+export interface Portfolio {
   id:           number
   name:         string
   cash:         number
