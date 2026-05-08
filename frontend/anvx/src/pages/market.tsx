@@ -13,11 +13,11 @@ import {
 
 export function Market() {
     return (
-        <div className="flex min-h-svh w-full justify-center p-6 md:p-10" >
+        <div className="flex min-h-svh w-full justify-center p-2 lg:p-6 md:p-10" >
             <div className="w-full max-w-md">
 
 
-                <Card className="m-5 gap-0">
+                <Card className="m-0 gap-0">
                 <div className="flex items-center justify-between px-5 pt-2 pb-[10px] shrink-0">
                     <div className="logo-text">ANVX
                         <span>sim</span>
