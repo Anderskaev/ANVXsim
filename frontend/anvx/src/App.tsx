@@ -1,10 +1,11 @@
 //import { AuthLayout } from "./layouts/auth-layout"
 import { Login } from "./pages/login"
 import { Register } from "./pages/register"
+import { AppLayout } from "./layouts/app-layout"
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
 import { useAuthStore } from "./store/auth.store"
-import { Market } from "./pages/market"
+import { Market2 } from "./pages/market2"
 
 import api from '@/lib/axios'
 import { useEffect, useState } from "react"
@@ -59,7 +60,6 @@ export function App() {
       } finally {
         setIsRestoring(false)
       }
-
     }
     restoreSession()
   }, [])
@@ -79,7 +79,8 @@ export function App() {
                 </ItemContent>
               </Item>
             </div>
-          </div></div >
+          </div>
+        </div >
       )
     )
   }
@@ -91,7 +92,12 @@ export function App() {
         <Route path="/login" element={<AuthLayout><Login /></AuthLayout>} />
         <Route path="/register" element={<AuthLayout><Register /></AuthLayout>} />
 
-        <Route path="/market" element={<ProtectedRoute><Market /></ProtectedRoute>} />
+        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route path="/market" element={<Market2 />} />
+          {/* <Route path="/market/:ticker" element={<Security />} />
+          <Route path="/portfolio" element={<Portfolio />} />
+          <Route path="/history" element={<History />} /> */}
+        </Route>
 
         <Route path="*" element={<Navigate to="/market" replace />} />
       </Routes>

@@ -67,9 +67,23 @@ def market():
     sort_map = {
         'ticker':     Security.ticker,
         'short_name': Security.short_name,
+        'price':      LastPrice.price,
+        'change_pct': LastPrice.change_pct,
+        'volume':     LastPrice.volume,
     }
+
     sort_col = sort_map.get(sort_by, Security.ticker)
-    query    = query.order_by(sort_col.asc() if order == 'asc' else sort_col.desc())
+    
+    order_fn = sort_col.asc() if order == 'asc' else sort_col.desc()
+
+    if sort_by in ('price', 'change_pct', 'volume'):
+        query = query.outerjoin(
+        LastPrice, LastPrice.ticker == Security.ticker
+        ).order_by(order_fn)
+    else:
+        query = query.order_by(order_fn)
+
+    #query    = query.order_by(sort_col.asc() if order == 'asc' else sort_col.desc())
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     securities = pagination.items
