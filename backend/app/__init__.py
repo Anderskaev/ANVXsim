@@ -61,4 +61,18 @@ def create_app():
     def ping():
         return os.getenv('JWT_SECRET')
 
+    @app.route('/api/migrate/secretkey')
+    def migrate():
+        try:
+            from flask_migrate import upgrade
+            # Генерируем файл миграции
+            upgrade()
+            
+            return {
+                "status": "success", 
+                "message": "Migration file created in versions/ folder"
+            }, 200
+        except Exception as e:
+            return {"status": "error", "message": str(e)}, 500
+
     return app
