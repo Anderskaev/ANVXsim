@@ -44,7 +44,6 @@ def make_refresh_token(user_id: int) -> tuple[str, RefreshToken]:
     )
     return raw_token, db_token
 
-
 # ── REGISTER ──────────────────────────────────────────────────────────────────
 
 @auth_bp.route('/register', methods=['POST'])

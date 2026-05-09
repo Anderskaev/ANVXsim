@@ -11,7 +11,8 @@ class Security(db.Model):
     isin       = db.Column(db.String(12),   nullable=True)
     short_name = db.Column(db.String(64),   nullable=False)
     full_name  = db.Column(db.String(255),  nullable=True)
-    type       = db.Column(db.Enum('share', 'bond', 'etf', 'currency'), nullable=False, default='share')
+    type       = db.Column(db.Enum('share', 'bond', 'etf', 'currency', 'pif', 'other'), nullable=False, default='share')
+    #type       = db.Column(db.String(10),  nullable=True)
     board      = db.Column(db.String(12),   nullable=False, default='TQBR')
     lot_size   = db.Column(db.Integer,      nullable=False, default=1)
     currency   = db.Column(db.String(3),    nullable=False, default='RUB')
@@ -19,10 +20,11 @@ class Security(db.Model):
     updated_at = db.Column(db.DateTime,     nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # relationships
-    last_price = db.relationship('LastPrice', backref='security', uselist=False, cascade='all, delete-orphan')
-    candles    = db.relationship('Candle',    backref='security', cascade='all, delete-orphan')
-    dividends  = db.relationship('Dividend',  backref='security', cascade='all, delete-orphan')
-    coupons    = db.relationship('Coupon',    backref='security', cascade='all, delete-orphan')
+    last_price    = db.relationship('LastPrice', backref='security', uselist=False, cascade='all, delete-orphan')
+    candles       = db.relationship('Candle',    backref='security', cascade='all, delete-orphan')
+    dividends     = db.relationship('Dividend',  backref='security', cascade='all, delete-orphan')
+    coupons       = db.relationship('Coupon',    backref='security', cascade='all, delete-orphan')
+    amortization  = db.relationship('Amortization',    backref='security', cascade='all, delete-orphan')
 
     def to_dict(self, with_price=False):
         d = {
@@ -136,7 +138,7 @@ class Coupon(db.Model):
     ticker      = db.Column(db.String(12),     db.ForeignKey('securities.ticker', onupdate='CASCADE', ondelete='CASCADE'), nullable=False)
     coupon_date = db.Column(db.Date,           nullable=False)
     amount      = db.Column(db.Numeric(18, 4), nullable=False)
-    accrued_int = db.Column(db.Numeric(18, 4), nullable=True)
+    currency      = db.Column(db.String(3),    nullable=False, default='RUB')
 
     __table_args__ = (
         db.UniqueConstraint('ticker', 'coupon_date', name='uq_coupon'),
@@ -147,9 +149,29 @@ class Coupon(db.Model):
             'ticker':      self.ticker,
             'coupon_date': self.coupon_date.isoformat(),
             'amount':      float(self.amount),
-            'accrued_int': float(self.accrued_int) if self.accrued_int else None,
+            'currency':    self.currency,
         }
 
+class Amortization(db.Model):
+    __tablename__ = 'amortizations'
+
+    id          = db.Column(db.Integer,        primary_key=True, autoincrement=True)
+    ticker      = db.Column(db.String(12),     db.ForeignKey('securities.ticker', onupdate='CASCADE', ondelete='CASCADE'), nullable=False)
+    amort_date = db.Column(db.Date,           nullable=False)
+    amount      = db.Column(db.Numeric(18, 4), nullable=False)
+    currency      = db.Column(db.String(3),    nullable=False, default='RUB')
+
+    __table_args__ = (
+        db.UniqueConstraint('ticker', 'amort_date', name='uq_amortization'),
+    )
+
+    def to_dict(self):
+        return {
+            'ticker':      self.ticker,
+            'amort_date': self.amort_date.isoformat(),
+            'amount':      float(self.amount),
+            'currency':    self.currency,
+        }
 
 # USER
 
@@ -315,7 +337,7 @@ class Accrual(db.Model):
     id           = db.Column(db.BigInteger,  primary_key=True, autoincrement=True)
     portfolio_id = db.Column(db.Integer,     db.ForeignKey('portfolios.id', ondelete='CASCADE'), nullable=False)
     ticker       = db.Column(db.String(12),  nullable=False)
-    type         = db.Column(db.Enum('dividend', 'coupon'), nullable=False)
+    type         = db.Column(db.Enum('dividend', 'coupon', 'amortization'), nullable=False)
     amount       = db.Column(db.Numeric(18, 4), nullable=False)
     quantity     = db.Column(db.Integer,     nullable=False)
     source_date  = db.Column(db.Date,        nullable=False)

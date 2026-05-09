@@ -11,7 +11,7 @@ const links = [
 ]
 
 export function Navbar() {
-  const { user, portfolio, logout } = useAuthStore()
+  const { logout } = useAuthStore()
 
   return (
     <aside className="flex flex-col h-full p-4 gap-6">
@@ -43,18 +43,8 @@ export function Navbar() {
 
       {/* портфель + пользователь */}
       <div className="space-y-3 border-t pt-4">
-        {portfolio && (
-          <div className="px-2 space-y-1">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              Портфель
-            </p>
-            <p className="text-sm font-semibold">
-              ₽ {portfolio.cash.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}
-            </p>
-          </div>
-        )}
+
         <div className="px-2 space-y-1">
-          <p className="text-xs text-muted-foreground truncate">{user?.name}</p>
           <Button
             variant="ghost"
             size="sm"

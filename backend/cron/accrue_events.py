@@ -9,7 +9,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import time
 from datetime import datetime, date, timedelta
 from app import create_app, db
-from app.models import Dividend, Coupon, Position
+from app.models import Amortization, Dividend, Coupon, Position
 
 app = create_app()
 
@@ -81,6 +81,29 @@ def accrue(ticker, sec_type, registry_date, amount_per_share):
 with app.app_context():
     start_time     = time.time()
     total_accruals = 0
+
+    # ── амортизации ─────────────────────────────────────────────
+    amortizations = Amortization.query.filter_by(amort_date=ACCRUAL_DATE).all()
+    print(f'Амортизации на {ACCRUAL_DATE}: {len(amortizations)} бумаг')
+
+    for amort in amortizations:
+        iter_start = time.time()
+        count      = accrue(amort.ticker, 'amortization', ACCRUAL_DATE, amort.amount)
+
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f'  Ошибка commit амортизация {amort.ticker}: {e}')
+            continue
+
+        elapsed       = time.time() - iter_start
+        total_elapsed = time.time() - start_time
+        total_accruals += count
+        print(
+            f'  {amort.ticker} | {count} портфелей | '
+            f'{elapsed:.1f}с | всего {total_elapsed:.0f}с'
+        )    
 
     # ── дивиденды ─────────────────────────────────────────────
     dividends = Dividend.query.filter_by(registry_date=ACCRUAL_DATE).all()

@@ -18,22 +18,41 @@ ISS_BASE = 'https://iss.moex.com/iss'
 BOARDS = [
     # (engine, market, board, type)
     ('stock', 'shares',   'TQBR', 'share'),
-    ('stock', 'shares',   'TQBS', 'share'),  # внесписочные акции
+   # ('stock', 'shares',   'TQBS', 'share'),  # внесписочные акции
     ('stock', 'bonds',    'TQOB', 'bond'),
-    ('stock', 'bonds',    'TQCB', 'bond'),   # корп. облигации
-    ('stock', 'shares',   'TQTF', 'etf'),
+   # ('stock', 'bonds',    'TQCB', 'bond'),   # корп. облигации
+   # ('stock', 'shares',   'TQTF', 'etf'),
 ]
+
+SECTYPE_MAP = {
+    "1": "share",
+    "2": "share",
+    "3": "bond",
+    "4": "bond",
+    "5": "bond",
+    "6": "bond",
+    "7": "bond",
+    "8": "bond",
+    "C": "bond",
+    "J": "etf",
+    "E": "etf",
+    "9":"pif",
+    "A":"pif",
+    "B":"pif",
+    "0":"other"
+}
 
 
 def fetch_board(engine, market, board, sec_type):
     url = (
         f'{ISS_BASE}/engines/{engine}/markets/{market}'
-        f'/boards/{board}/securities.json'
+        f'/securities.json'
+        # f'/boards/{board}/securities.json'
     )
     params = {
         'iss.meta':           'off',
         'iss.only':           'securities,marketdata',
-        'securities.columns': 'SECID,SHORTNAME,SECNAME,LOTSIZE,ISIN,CURRENCYID',
+        'securities.columns': 'SECID,SHORTNAME,SECNAME,LOTSIZE,ISIN,CURRENCYID,STATUS,SECTYPE,PREVPRICE',
         'marketdata.columns': 'SECID,LAST,OPEN,HIGH,LOW,VOLTODAY,LASTTOPREVPRICE,CHANGE',
     }
     try:
@@ -74,15 +93,17 @@ def process_board(data, sec_type):
         security.lot_size   = int(s.get('LOTSIZE') or 1)
         security.isin       = s.get('ISIN')
         security.currency   = s.get('CURRENCYID') or 'RUB'
-        security.type       = sec_type
-        security.is_active  = True
+        security.type       = SECTYPE_MAP.get(s.get('SECTYPE',"0").upper(),"other")
+        security.is_active  = s.get('STATUS')=='A'
         security.updated_at = datetime.utcnow()
 
         # ── определяем цену ──────────────────────────────────
         # если LAST равен null — берём цену закрытия предыдущего дня
         price = md.get('LAST') # or md.get('LASTTOPREVPRICE')
         if not price:
-            continue  # бумага без цены вообще — пропускаем
+            price = s.get('PREVPRICE')
+            if not price:
+                continue  # бумага без цены вообще — пропускаем
 
         # change_pct = None
         # prev = md.get('LASTTOPREVPRICE')

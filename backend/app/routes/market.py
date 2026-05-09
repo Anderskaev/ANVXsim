@@ -60,7 +60,7 @@ def market():
             )
         )
 
-    if sec_type in ('share', 'bond', 'etf', 'currency'):
+    if sec_type in ('share', 'bond', 'etf', 'currency','pif','other'):
         query = query.filter_by(type=sec_type)
 
     # сортировка

@@ -34,6 +34,8 @@ const TYPE_FILTERS = [
   { value: 'share', label: 'Акции' },
   { value: 'bond', label: 'Облигации' },
   { value: 'etf', label: 'ETF' },
+  { value: 'pif', label: 'ПИФ' },
+  { value: 'other', label: 'Иные' },
 ]
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -86,7 +88,7 @@ function Filters() {
         {TYPE_FILTERS.map((f) => (
           <button
             key={f.value}
-            onClick={() => setFilter({ type: f.value })}
+            onClick={() =>  setFilter({ type: f.value })}
             className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${type === f.value
               ? 'bg-primary text-primary-foreground border-primary'
               : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground'
@@ -264,8 +266,9 @@ export function Market2() {
 
       {/* заголовок */}
 
-      {isMobile && (
+      {(
         <>
+        <div className = {cn(!isMobile?"flex w-full items-center justify-left":"")} >
           <Card className="port-card">
             <CardHeader>
               <CardTitle className="port-label">
@@ -280,13 +283,14 @@ export function Market2() {
                 <span className={cn(`pnl-badge`, portfolioData && portfolioData?.total_pnl < 0 ? 'dn' : 'up')}>{fmtBadge(portfolioData?.total_pnl)}</span>
               </div>
               <Separator className="my-4" />
-              <div className="flex h-5 items-center justify-center gap-4 text-sm">            
+              <div className="flex h-5 items-center justify-center gap-4 text-sm">
                 <div className="port-cash">Наличные: {fmtPrice(portfolioData?.portfolio.cash)}&nbsp;₽</div>
                 <Separator orientation="vertical" />
                 <div className="port-cash">Ценные бумаги: {fmtPrice(portfolioData?.pos_value)}</div>
               </div>
             </CardContent>
           </Card>
+          </div>
         </>
       )}
 
