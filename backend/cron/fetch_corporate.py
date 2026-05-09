@@ -70,7 +70,7 @@ with app.app_context():
     start_time = time.time()
 
     # ── купоны — только облигации ─────────────────────────────
-    bonds = Security.query.filter_by(is_active=True, type='bond').all()
+    bonds = Security.query.filter_by(is_active=True, type='bond', ticker='RU000A10CXG3').all()
     print(f'\nКупоны и амортизациии: {len(bonds)} облигаций')
 
     for i, sec in enumerate(bonds, 1):
@@ -80,8 +80,11 @@ with app.app_context():
         amort_count = 0
         count      = 0
 
+        print(f'  Амортизации {sec.ticker}: {len(amort)}')
+        
+
         for a in amort:
-            if not a.get('ammortdate') or not a.get('value_rub'):
+            if not a.get('amortdate') or not a.get('value_rub'):
                 continue
             try:
                 db.session.execute(
@@ -89,7 +92,7 @@ with app.app_context():
                         INSERT INTO amortizations (ticker, amort_date, amount, currency)
                         VALUES (:ticker, :amort_date, :amount, :currency)
                         ON DUPLICATE KEY UPDATE
-                            payment_date = VALUES(payment_date),
+                            amort_date = VALUES(amort_date),
                             amount       = VALUES(amount)
                     """),
                     {
@@ -139,6 +142,7 @@ with app.app_context():
             print(f'  Ошибка commit {sec.ticker}: {e}')
 
         time.sleep(0.3)
+
 
     # ── дивиденды — только акции ──────────────────────────────
     shares = Security.query.filter_by(is_active=True, type='share').all()

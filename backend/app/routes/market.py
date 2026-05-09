@@ -9,7 +9,7 @@ from itertools import groupby
 from requests_ratelimiter import LimiterSession
 
 from app import db, cache
-from app.models import Security, LastPrice, Candle, Dividend, Coupon
+from app.models import Amortization, Security, LastPrice, Candle, Dividend, Coupon
 
 market_bp = Blueprint('market', __name__)
 
@@ -148,6 +148,13 @@ def security(ticker):
             Coupon.coupon_date >= date.today(),
         ).order_by(Coupon.coupon_date.asc()).limit(5).all()
 
+    upcoming_amort = []
+    if sec.type == 'bond':
+        upcoming_amort = Amortization.query.filter(
+            Amortization.ticker == ticker.upper(),
+            Amortization.amort_date >= date.today(),
+        ).order_by(Amortization.amort_date.asc()).limit(5).all()        
+
     result = sec.to_dict()
 
     if lp:
@@ -163,6 +170,7 @@ def security(ticker):
 
     result['dividends'] = [d.to_dict() for d in upcoming_divs + list(reversed(past_divs))]
     result['coupons']   = [c.to_dict() for c in upcoming_coupons]
+    result['amortizations'] = [a.to_dict() for a in upcoming_amort]
 
     return jsonify(result), 200
 
