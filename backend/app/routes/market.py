@@ -5,6 +5,7 @@ from flask_jwt_extended import jwt_required
 import requests
 from datetime import date, timedelta
 from itertools import groupby
+from datetime import datetime, timezone, timedelta
 
 from requests_ratelimiter import LimiterSession
 
@@ -239,6 +240,15 @@ def chart(ticker):
     result = aggregate_candles(candles, tf)[-limit:]
     return jsonify({'ticker': ticker.upper(), "tf": tf, "candles": result}), 200
 
+INTRADAY_INTERVALS = {1, 10, 60}  # минутные таймфреймы
+MSK = timezone(timedelta(hours=3))
+
+def format_candle_date(date_str: str, interval: int) -> str | int:
+    if int(interval) in INTRADAY_INTERVALS:
+        dt = datetime.strptime(str(date_str)[:19], '%Y-%m-%d %H:%M:%S')
+        dt = dt.replace(tzinfo=MSK)
+        return int(dt.timestamp())
+    return str(date_str)[:10]
 
 # ── CHART2 (from ISS ) ────────────────────────────────────────────────────────
 @market_bp.route('/chart2/<ticker>')
@@ -253,7 +263,8 @@ def chart2(ticker):
 
     # limit=min(limit,60)
 
-    interval = TIMEFRAME_ISS.get(tf)
+    #interval = TIMEFRAME_ISS.get(tf)
+    interval = tf
     if not interval:
         return jsonify({'error': f'Неверный таймфрейм. Допустимые: {list(TIMEFRAME_ISS.keys())}'}), 400
 
@@ -288,11 +299,24 @@ def chart2(ticker):
         if 'begin' in columns:
             indx = columns.index('begin')
             columns[indx] = "date"
+        
+        seen = set()
+        candles = []
+        for row in rows:
+            d = dict(zip(columns, row))
+            if 'date' in d and d['date']:
+                d['date'] = format_candle_date(d['date'], interval)
+            date_key = d.get('date')
+            if date_key in seen:
+                continue
+            seen.add(date_key)
+            candles.append(d)
 
         return jsonify({
             'ticker': ticker.upper(),
             'tf': tf,
-            'candles': [dict(zip(columns, row)) for row in rows]
+            #'candles': [dict(zip(columns, row)) for row in rows]
+            'candles': candles
         }), 200
 
     except requests.exceptions.Timeout:

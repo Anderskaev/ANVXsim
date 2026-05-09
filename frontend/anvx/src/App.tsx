@@ -17,6 +17,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item"
 import { Spinner } from "@/components/ui/spinner"
+import Security from "./pages/security"
 
 function AuthLayout({ children }: { children: React.ReactNode }) {
   const isAuth = useAuthStore((s) => s.isAuth)
@@ -94,8 +95,8 @@ export function App() {
 
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route path="/market" element={<Market />} />
-          {/* <Route path="/market/:ticker" element={<Security />} />
-          <Route path="/portfolio" element={<Portfolio />} />
+          <Route path="/market/:ticker" element={<Security />} />
+         {/* <Route path="/portfolio" element={<Portfolio />} />
           <Route path="/history" element={<History />} /> */}
         </Route>
 

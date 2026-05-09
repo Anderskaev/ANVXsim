@@ -33,7 +33,7 @@ export function useMarket() {
 
   // const [sortCol, setSortCol] = useState<SortColumn | null>(null)
   // const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-  console.log(type);
+
   const query = useInfiniteQuery<MarketPage>({
     queryKey:  ['market', type, search, sortCol, sortDir],  // ← сортировка в ключе
     queryFn:   ({ pageParam = 1 }) =>
