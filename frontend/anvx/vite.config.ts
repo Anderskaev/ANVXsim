@@ -5,7 +5,7 @@ import { defineConfig } from "vite"
 
 // https://vite.dev/config/
 export default defineConfig({
- //base: '/public/', 
+ base: '/public/', 
   build: {
     chunkSizeWarningLimit: 1000, // Порог в 1000 КБ вместо 500
   },
