@@ -5,7 +5,7 @@ import { AppLayout } from "./layouts/app-layout"
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
 import { useAuthStore } from "./store/auth.store"
-import { Market2 } from "./pages/market2"
+import { Market } from "./pages/market"
 
 import api from '@/lib/axios'
 import { useEffect, useState } from "react"
@@ -93,7 +93,7 @@ export function App() {
         <Route path="/register" element={<AuthLayout><Register /></AuthLayout>} />
 
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-          <Route path="/market" element={<Market2 />} />
+          <Route path="/market" element={<Market />} />
           {/* <Route path="/market/:ticker" element={<Security />} />
           <Route path="/portfolio" element={<Portfolio />} />
           <Route path="/history" element={<History />} /> */}

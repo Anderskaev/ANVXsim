@@ -70,7 +70,7 @@ with app.app_context():
     start_time = time.time()
 
     # ── купоны — только облигации ─────────────────────────────
-    bonds = Security.query.filter_by(is_active=True, type='bond', ticker='RU000A10CXG3').all()
+    bonds = Security.query.filter_by(is_active=True, type='bond').all()
     print(f'\nКупоны и амортизациии: {len(bonds)} облигаций')
 
     for i, sec in enumerate(bonds, 1):
