@@ -1,11 +1,8 @@
 // src/pages/Security.tsx
 
-import { useCallback, useState, type Key } from 'react'
+import { useCallback, useEffect, useRef, useState, type Key } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useRef, useEffect } from 'react'
-import { createChart, ColorType, CandlestickSeries } from 'lightweight-charts'
 import { useSecurity, type Amortization, type Coupon, type Dividend } from '@/hooks/useSecurity'
-import { useChart, type Candle } from '@/hooks/useChart'
 import { usePortfolio } from '@/hooks/usePortfolio'
 import { TradeModal } from '@/components/trade-modal'
 import { Button } from '@/components/ui/button'
@@ -13,6 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { format } from 'date-fns'
 import { ru } from 'date-fns/locale'
+import { useChart, type Candle } from '@/hooks/useChart'
+import { createChart, ColorType, CandlestickSeries } from 'lightweight-charts'
 import api from '@/lib/axios'
 
 // ── TIMEFRAMES ────────────────────────────────────────────────────────────────
@@ -35,106 +34,6 @@ const fmt = (n: number | null, d = 2) =>
 const fmtDate = (s: string) =>
     format(new Date(s), 'd MMM yyyy', { locale: ru })
 
-// ── CANDLE CHART ──────────────────────────────────────────────────────────────
-
-function CandleChart({
-    candles,
-    onLoadMore,
-    isLoadingMore,
-}: {
-    candles: Candle[]
-    onLoadMore: () => void
-    isLoadingMore: boolean
-}) {
-    const chartRef = useRef<HTMLDivElement>(null)
-    const seriesRef = useRef<any>(null)
-    const loadingRef = useRef(false)  // защита от двойного вызова
-
-    useEffect(() => {
-        if (!chartRef.current || !candles.length) return
-
-        const chart = createChart(chartRef.current, {
-            layout: {
-                background: { type: ColorType.Solid, color: 'transparent' },
-                textColor: '#64748b',
-            },
-            grid: {
-                vertLines: { color: 'hsl(var(--border))' },
-                horzLines: { color: 'hsl(var(--border))' },
-            },
-            crosshair: { mode: 1 },
-            timeScale: {
-                timeVisible: true,
-                secondsVisible: false,
-                borderColor: 'hsl(var(--border))',
-            },
-            rightPriceScale: { borderColor: 'hsl(var(--border))' },
-            width: chartRef.current.clientWidth,
-            height: 340,
-        })
-
-        const series = chart.addSeries(CandlestickSeries, {
-            upColor: '#22c55e',
-            downColor: '#ef4444',
-            borderUpColor: '#22c55e',
-            borderDownColor: '#ef4444',
-            wickUpColor: '#22c55e',
-            wickDownColor: '#ef4444',
-        })
-        seriesRef.current = series
-
-        const seen = new Set<string | number>()
-        const unique = candles.filter((c) => {
-            if (seen.has(c.date)) return false
-            seen.add(c.date)
-            return true
-        })
-
-        series.setData(unique.map((c) => ({
-            time: c.date as any,
-            open: c.open,
-            high: c.high,
-            low: c.low,
-            close: c.close,
-        })))
-
-        chart.timeScale().scrollToRealTime()
-
-        // ── подписка на прокрутку влево ───────────────────────
-        chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-            if (!range) return
-            if (range.from < 10 && !loadingRef.current) {
-                loadingRef.current = true
-                onLoadMore()
-            }
-        })
-
-        const ro = new ResizeObserver(() => {
-            chart.applyOptions({ width: chartRef.current?.clientWidth ?? 600 })
-        })
-        ro.observe(chartRef.current)
-
-        return () => { chart.remove(); ro.disconnect() }
-    }, [candles])  // пересоздаём при изменении candles
-
-    // сбрасываем флаг когда загрузка завершилась
-    useEffect(() => {
-        if (!isLoadingMore) {
-            loadingRef.current = false
-        }
-    }, [isLoadingMore])
-
-    return (
-        <div className="relative">
-            <div ref={chartRef} className="w-full rounded-lg overflow-hidden" />
-            {isLoadingMore && (
-                <div className="absolute top-2 left-2 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded">
-                    Загрузка...
-                </div>
-            )}
-        </div>
-    )
-}
 
 // ── POSITION BLOCK ────────────────────────────────────────────────────────────
 
@@ -236,87 +135,202 @@ function CouponsBlock({ coupons, amortizations }: {
     )
 }
 
+function CandleChart({
+    candles,
+    onLoadMore,
+    isLoadingMore,
+}: {
+    candles: Candle[]
+    onLoadMore: () => void
+    isLoadingMore: boolean
+}) {
+    const chartRef = useRef<HTMLDivElement>(null)
+    const seriesRef = useRef<any>(null)
+    const isFetchingRef = useRef(false)  // защита от двойного вызова
+
+    // Создаем рефы для актуальных значений пропсов, чтобы не пересоздавать график при их изменении
+    const onLoadMoreRef = useRef(onLoadMore)
+    const isLoadingMoreRef = useRef(isLoadingMore)
+
+    // Синхронизируем рефы с актуальными пропсами при каждом рендере
+    useEffect(() => {
+        onLoadMoreRef.current = onLoadMore
+    }, [onLoadMore])
+
+    useEffect(() => {
+        isLoadingMoreRef.current = isLoadingMore
+        if (!isLoadingMore) {
+            isFetchingRef.current = false // Разблокируем для следующего скролла
+        }
+    }, [isLoadingMore])
+
+    useEffect(() => {
+        if (!chartRef.current) return
+
+        const chart = createChart(chartRef.current, {
+            layout: {
+                background: { type: ColorType.Solid, color: 'transparent' },
+                textColor: '#64748b',
+            },
+            grid: {
+                vertLines: { color: 'hsl(var(--border))' },
+                horzLines: { color: 'hsl(var(--border))' },
+            },
+            crosshair: { mode: 1 },
+            timeScale: {
+                timeVisible: true,
+                secondsVisible: false,
+                borderColor: 'hsl(var(--border))',
+            },
+            rightPriceScale: { borderColor: 'hsl(var(--border))' },
+            width: chartRef.current.clientWidth,
+            height: 340,
+        })
+
+        const series = chart.addSeries(CandlestickSeries, {
+            upColor: '#22c55e',
+            downColor: '#ef4444',
+            borderUpColor: '#22c55e',
+            borderDownColor: '#ef4444',
+            wickUpColor: '#22c55e',
+            wickDownColor: '#ef4444',
+        })
+        seriesRef.current = series
+
+        chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+            if (!range) return
+            if (range.from < 10 && !isLoadingMoreRef.current && !isFetchingRef.current) {
+                isFetchingRef.current = true
+                onLoadMoreRef.current()
+            }
+        })
+
+        const ro = new ResizeObserver(() => {
+            chart.applyOptions({ width: chartRef.current?.clientWidth ?? 600 })
+        })
+        ro.observe(chartRef.current)
+
+        return () => {
+            chart.remove()
+            ro.disconnect()
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!chartRef.current) return
+        if (!seriesRef.current || candles.length === 0) return
+
+        seriesRef.current.setData(candles.map((c) => ({
+            time: c.date as any,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+        })))
+
+    }, [candles])
+
+    return (
+        <div className="relative">
+            <div ref={chartRef} className="w-full rounded-lg overflow-hidden" />
+            {isLoadingMore && (
+                <div className="absolute top-2 left-2 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded">
+                    Загрузка...
+                </div>
+            )}
+        </div>
+    )
+
+}
+
 // ── SECURITY PAGE ─────────────────────────────────────────────────────────────
 
+
 export default function Security() {
-    const [allCandles, setAllCandles] = useState<Candle[]>([])
-    const [oldestDate, setOldestDate] = useState<string | undefined>(undefined)
-    const [isLoadingMore, setIsLoadingMore] = useState(false)
 
     const { ticker } = useParams<{ ticker: string }>()
     const navigate = useNavigate()
     const [tf, setTf] = useState(24)  // 1Д по умолчанию
     const [tradeOpen, setTradeOpen] = useState(false)
     const [tradeSide, setTradeSide] = useState<'buy' | 'sell'>('buy')
+    const [isLoadingMore, setIsLoadingMore] = useState(false)
 
     const { data: sec, isLoading } = useSecurity(ticker ?? '')
     const { data: portfolio } = usePortfolio()
     const position = portfolio?.positions.find((p) => p.ticker === ticker)
 
-    const { data: chartData, isLoading: chartLoading } = useChart(sec?.ticker ?? '', tf)
+    const [candles, setCandles] = useState<Candle[]>([])
+    const [start_index, setStartIndex] = useState(501)
+    const [prev_start_index, setPrevStartIndex] = useState(0)
 
-    // при смене таймфрейма или бумаги — сбрасываем
-    useEffect(() => {
-        setAllCandles([])
-        setOldestDate(undefined)
-    }, [tf, ticker])
+    const { data: ChartData, isLoading: chartLoading } = useChart(sec?.ticker ?? '', tf)
 
-    // когда пришли новые данные — сетаем
+
+
+    // Один эффект для обработки смены TF, тикера и прихода данных
     useEffect(() => {
-        if (!chartData?.candles.length) return
-        setAllCandles(chartData.candles)
-        // запоминаем самую раннюю дату
-        const first = chartData.candles[0].date
-        if (typeof first === 'number') {
-            // Unix timestamp → 'yyyy-mm-dd'
-            setOldestDate(new Date(first * 1000).toISOString().slice(0, 10))
+        // Если данные в кэше или только пришли — записываем их
+        if (ChartData?.candles) {
+            setCandles(ChartData.candles)
         } else {
-            setOldestDate(first)
+            // Если данных еще нет (идет загрузка) — очищаем график
+            setCandles([])
         }
-    }, [chartData])
+        if (ChartData?.candles?.length || 0 < 500) {
+            setStartIndex(501)
+            setPrevStartIndex(0)
+        } else {
+            // Сбрасываем индексы пагинации при каждом изменении параметров
+            setStartIndex(501)
+            setPrevStartIndex(0)
 
-    // догрузка при прокрутке влево
+        }
+
+    }, [tf, ticker, ChartData]) // Добавили tf и ticker в зависимости
+
     const handleLoadMore = useCallback(async () => {
-        if (!sec || !oldestDate || isLoadingMore) return
+
+        if (!sec || isLoadingMore || start_index == prev_start_index) return
         setIsLoadingMore(true)
-
         try {
-            // считаем период для догрузки
-            const TF_DAYS: Record<number, number> = {
-                1: 1, 10: 3, 60: 7, 24: 365, 7: 730, 31: 1095, 4: 1095,
-            }
-
-            const days = TF_DAYS[tf] ?? 365
-            const endDate = oldestDate
-            const start = new Date(oldestDate)
-            start.setDate(start.getDate() - days)
-            const startDate = start.toISOString().slice(0, 10)
-
             const res = await api.get(`/market/chart2/${sec.ticker}`, {
-                params: { tf, start_date: startDate, end_date: endDate },
+                params: {
+                    tf,
+                    'reverse': 'true',
+                    start_index,
+                },
             })
+            const newCandles = (await res).data.candles as Candle[]
 
-            const older: Candle[] = res.data.candles
-            if (!older.length || older.length < 5) {
-                // данных больше нет — запрещаем дальнейшую догрузку
-                setOldestDate(undefined)
+           
+            const seen = new Set<string | number>()
+            const unique = newCandles.filter((c) => {
+                if (seen.has(c.date)) return false
+                seen.add(c.date)
+                return true
+            })
+      
+            if (!unique || unique.length === 0) {
+               
+                setPrevStartIndex(start_index) // Приравняет их, чтобы заблокировать дальнейшие запросы
                 return
             }
 
-            // prepend — старые свечи + существующие
-            setAllCandles((prev) => {
-                const existingDates = new Set(prev.map((c) => c.date))
-                const newUnique = older.filter((c) => !existingDates.has(c.date))
-                return [...newUnique, ...prev]
+            setPrevStartIndex(start_index)
+            setStartIndex((prev) => {
+                const nextIndex = prev + unique.length
+                return nextIndex
             })
-            setOldestDate(typeof older[0].date === 'string' ? older[0].date : undefined)
+
+            setCandles((prev) => [...unique, ...prev])
 
         } catch (e) {
             console.error('Ошибка догрузки свечей', e)
         } finally {
             setIsLoadingMore(false)
         }
-    }, [sec, tf, oldestDate, isLoadingMore])
+
+    }, [sec, tf, isLoadingMore, start_index, prev_start_index])
 
     const up = (sec?.change_pct ?? 0) >= 0
 
@@ -398,16 +412,23 @@ export default function Security() {
                 ))}
             </div>
 
-            {/* chart */}
             {chartLoading ? (
                 <Skeleton className="h-[340px] w-full rounded-lg" />
             ) : (
                 <CandleChart
-                    candles={allCandles}
+                    candles={candles}
                     onLoadMore={handleLoadMore}
                     isLoadingMore={isLoadingMore}
                 />
             )}
+
+            {/* chart */}
+            {/* {chartLoading ? (
+                <Skeleton className="h-[340px] w-full rounded-lg" />
+            ) : (
+                <></>
+                 <CandleChart />
+            )} */}
 
             {/* position */}
             <PositionBlock ticker={sec.ticker} price={sec.price} />

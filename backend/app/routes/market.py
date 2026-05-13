@@ -5,7 +5,9 @@ from flask_jwt_extended import jwt_required
 import requests
 from datetime import date, timedelta
 from itertools import groupby
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+import os
+import time
 
 from requests_ratelimiter import LimiterSession
 
@@ -245,6 +247,7 @@ MSK = timezone(timedelta(hours=3))
 
 def format_candle_date(date_str: str, interval: int) -> str | int:
     if int(interval) in INTRADAY_INTERVALS:
+
         dt = datetime.strptime(str(date_str)[:19], '%Y-%m-%d %H:%M:%S')
         dt = dt.replace(tzinfo=MSK)
         return int(dt.timestamp())
@@ -260,6 +263,8 @@ def chart2(ticker):
     tf    = request.args.get('tf',    '10',  type=str)
     start_date = request.args.get('start_date', None, type=str)
     end_date = request.args.get('end_date', None, type=str)
+    start = request.args.get('start_index', None, type=str)
+    reverse = request.args.get('reverse', None, type=str)
 
     # limit=min(limit,60)
 
@@ -271,6 +276,8 @@ def chart2(ticker):
     params = {"interval": interval, "iss.meta": 'off'}
     if start_date: params['from'] = start_date
     if end_date:   params['till'] = end_date
+    if reverse:   params['iss.reverse'] = reverse
+    if start:   params['start'] = start
 
     sec = Security.query.filter_by(ticker=ticker.upper(), is_active=True).first()
     if not sec:
@@ -292,6 +299,9 @@ def chart2(ticker):
     try:
         r = session.get(url, params=params, timeout=10)
         r.raise_for_status()
+        
+        # print('---------------')
+        # print(f'***URL: {r.url}')
         data    = r.json()
         columns = data['candles']['columns']
         rows    = data['candles']['data']
@@ -300,10 +310,13 @@ def chart2(ticker):
             indx = columns.index('begin')
             columns[indx] = "date"
         
+        columns.append('sdate')
+
         seen = set()
         candles = []
         for row in rows:
             d = dict(zip(columns, row))
+            d['sdate'] = d['date']
             if 'date' in d and d['date']:
                 d['date'] = format_candle_date(d['date'], interval)
             date_key = d.get('date')
@@ -311,6 +324,7 @@ def chart2(ticker):
                 continue
             seen.add(date_key)
             candles.append(d)
+        candles.sort(key=lambda x: x['date'])
 
         return jsonify({
             'ticker': ticker.upper(),

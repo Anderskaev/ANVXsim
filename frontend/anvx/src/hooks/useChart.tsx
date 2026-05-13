@@ -24,7 +24,7 @@ const TF_DAYS: Record<number, number> = {
   24: 365,  // 1д  → 1 год
   7:  730,  // 1н  → 2 года
   31: 1095, // 1мс → 3 года
-  4:  1095, // 3м  → 3 года
+  4:  3650//1095, // 3м  → 3 года
 }
 
 function getStartDate(tf: number): string {
@@ -35,13 +35,15 @@ function getStartDate(tf: number): string {
   return d.toISOString().slice(0, 10)  // 'yyyy-mm-dd'
 }
 
-export function useChart(ticker: string, tf: number, startDate?: string) {
+export function useChart(ticker: string, tf: number/*, startDate?: string, endDate?: string*/) {
   return useQuery<ChartResponse>({
-    queryKey: ['chart', ticker, tf, startDate],
+    queryKey: ['chart', ticker, tf],
     queryFn:  () => api.get(`/market/chart2/${ticker}`, {
       params: {
         tf,
-        start_date: startDate ?? getStartDate(tf),
+        'reverse': 'true',
+        //start_date: startDate ?? getStartDate(tf),
+        //end_date: endDate ? endDate : ''
       },
     }).then((r) => r.data),
     enabled:   !!ticker,

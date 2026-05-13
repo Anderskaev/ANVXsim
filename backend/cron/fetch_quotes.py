@@ -18,10 +18,10 @@ ISS_BASE = 'https://iss.moex.com/iss'
 BOARDS = [
     # (engine, market, board, type)
     ('stock', 'shares',   'TQBR', 'share'),
-   # ('stock', 'shares',   'TQBS', 'share'),  # внесписочные акции
+    ('stock', 'shares',   'TQBS', 'share'),  # внесписочные акции
     ('stock', 'bonds',    'TQOB', 'bond'),
-   # ('stock', 'bonds',    'TQCB', 'bond'),   # корп. облигации
-   # ('stock', 'shares',   'TQTF', 'etf'),
+    ('stock', 'bonds',    'TQCB', 'bond'),   # корп. облигации
+    ('stock', 'shares',   'TQTF', 'etf'),
 ]
 
 SECTYPE_MAP = {
@@ -46,8 +46,8 @@ SECTYPE_MAP = {
 def fetch_board(engine, market, board, sec_type):
     url = (
         f'{ISS_BASE}/engines/{engine}/markets/{market}'
-        f'/securities.json'
-        # f'/boards/{board}/securities.json'
+        #f'/securities.json'
+         f'/boards/{board}/securities.json'
     )
     params = {
         'iss.meta':           'off',
@@ -64,7 +64,7 @@ def fetch_board(engine, market, board, sec_type):
         return None, sec_type
 
 
-def process_board(data, sec_type):
+def process_board(data, sec_type, board):
     if not data:
         return
 
@@ -90,6 +90,7 @@ def process_board(data, sec_type):
 
         security.short_name = s.get('SHORTNAME') or ticker
         security.full_name  = s.get('SECNAME')
+        security.board      = board
         security.lot_size   = int(s.get('LOTSIZE') or 1)
         security.isin       = s.get('ISIN')
         security.currency   = s.get('CURRENCYID') or 'RUB'
@@ -129,7 +130,7 @@ def process_board(data, sec_type):
 with app.app_context():
     for engine, market, board, sec_type in BOARDS:
         data, sec_type = fetch_board(engine, market, board, sec_type)
-        process_board(data, sec_type)
+        process_board(data, sec_type, board)
 
     try:
         db.session.commit()
