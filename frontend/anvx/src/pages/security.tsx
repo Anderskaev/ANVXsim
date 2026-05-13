@@ -184,7 +184,7 @@ function CandleChart({
             },
             rightPriceScale: { borderColor: 'hsl(var(--border))' },
             width: chartRef.current.clientWidth,
-            height: 340,
+            height: 300,
         })
 
         const series = chart.addSeries(CandlestickSeries, {
