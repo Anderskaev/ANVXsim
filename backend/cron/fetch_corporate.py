@@ -147,7 +147,6 @@ with app.app_context():
         iter_start = time.time()
         rows, amort = fetch_coupons(sec.ticker)
         #amort = fetch_ammortizations(sec.ticker)
-        print(rows)
         amort_count = 0
         count      = 0
 
