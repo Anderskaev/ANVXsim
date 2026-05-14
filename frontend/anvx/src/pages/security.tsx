@@ -1,5 +1,4 @@
 // src/pages/Security.tsx
-
 import { useCallback, useEffect, useRef, useState, type Key } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useSecurity, type Amortization, type Coupon, type Dividend } from '@/hooks/useSecurity'
@@ -11,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { format } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { useChart, type Candle } from '@/hooks/useChart'
-import { createChart, ColorType, CandlestickSeries } from 'lightweight-charts'
+import { createChart, ColorType, CandlestickSeries, TickMarkType, type Time } from 'lightweight-charts'
 import api from '@/lib/axios'
 
 // ── TIMEFRAMES ────────────────────────────────────────────────────────────────
@@ -135,6 +134,22 @@ function CouponsBlock({ coupons, amortizations }: {
     )
 }
 
+const toDate = (time: Time): Date => {
+    // Строка вида "2026-05-14 19:20:00" или "2026-05-14"
+    if (typeof time === 'string') {
+        // Заменяем пробел на T чтобы парсилось корректно, добавляем Z если нет таймзоны
+        return new Date(time.replace(' ', 'T') + (time.includes('+') ? '' : 'Z'));
+    }
+    
+    // BusinessDay { year, month, day }
+    if (typeof time === 'object') {
+        return new Date(Date.UTC(time.year, time.month - 1, time.day));
+    }
+    
+    // Unix timestamp (number)
+    return new Date(time * 1000);
+};
+
 function CandleChart({
     candles,
     onLoadMore,
@@ -146,13 +161,10 @@ function CandleChart({
 }) {
     const chartRef = useRef<HTMLDivElement>(null)
     const seriesRef = useRef<any>(null)
-    const isFetchingRef = useRef(false)  // защита от двойного вызова
-
-    // Создаем рефы для актуальных значений пропсов, чтобы не пересоздавать график при их изменении
+    const isFetchingRef = useRef(false)
     const onLoadMoreRef = useRef(onLoadMore)
     const isLoadingMoreRef = useRef(isLoadingMore)
 
-    // Синхронизируем рефы с актуальными пропсами при каждом рендере
     useEffect(() => {
         onLoadMoreRef.current = onLoadMore
     }, [onLoadMore])
@@ -181,6 +193,54 @@ function CandleChart({
                 timeVisible: true,
                 secondsVisible: false,
                 borderColor: 'hsl(var(--border))',
+                tickMarkFormatter: (time: Time, tickMarkType: TickMarkType) => {
+                    const date = toDate(time);
+                    const options: Intl.DateTimeFormatOptions = {
+                        timeZone: 'Europe/Moscow',
+                    };
+
+                    switch (tickMarkType) {
+                        case TickMarkType.Year:
+                            options.year = 'numeric';
+                            break;
+                        case TickMarkType.Month:
+                            options.month = 'short';
+                            options.year = 'numeric';
+                            break;
+                        case TickMarkType.DayOfMonth:
+                            options.day = '2-digit';
+                            options.month = '2-digit';
+                            break;
+                        case TickMarkType.Time:
+                            options.hour = '2-digit';
+                            options.minute = '2-digit';
+                            break;
+                        case TickMarkType.TimeWithSeconds:
+                            options.hour = '2-digit';
+                            options.minute = '2-digit';
+                            options.second = '2-digit';
+                            break;
+                    }
+
+                    return new Intl.DateTimeFormat('ru-RU', options).format(date);
+                },
+            },
+            localization: {
+                locale: 'ru-RU', // Формат вывода дат
+
+                // Функция форматирования времени для всплывающей подсказки и оси
+                timeFormatter: (time: Time) => {
+                    // Переводим секунды Unix в миллисекунды JS
+                    const date = toDate(time);
+                    return new Intl.DateTimeFormat('ru-RU', {
+                        timeZone: 'Europe/Moscow', // Укажите нужный часовой пояс (например, 'GMT', 'Europe/Moscow')
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
+                    }).format(date);
+                },
             },
             rightPriceScale: { borderColor: 'hsl(var(--border))' },
             width: chartRef.current.clientWidth,
@@ -264,34 +324,37 @@ export default function Security() {
     const [prev_start_index, setPrevStartIndex] = useState(0)
 
     const { data: ChartData, isLoading: chartLoading } = useChart(sec?.ticker ?? '', tf)
-
-
+    const isLoadingMoreRef = useRef(isLoadingMore)
+    useEffect(() => { isLoadingMoreRef.current = isLoadingMore }, [isLoadingMore])
 
     // Один эффект для обработки смены TF, тикера и прихода данных
     useEffect(() => {
+
+        setStartIndex(501)
+        setPrevStartIndex(0)
+        setIsLoadingMore(false)
+
         // Если данные в кэше или только пришли — записываем их
         if (ChartData?.candles) {
             setCandles(ChartData.candles)
+            console.log(ChartData.candles)
         } else {
             // Если данных еще нет (идет загрузка) — очищаем график
             setCandles([])
         }
-        if (ChartData?.candles?.length || 0 < 500) {
-            setStartIndex(501)
-            setPrevStartIndex(0)
-        } else {
-            // Сбрасываем индексы пагинации при каждом изменении параметров
-            setStartIndex(501)
-            setPrevStartIndex(0)
 
-        }
 
     }, [tf, ticker, ChartData]) // Добавили tf и ticker в зависимости
 
     const handleLoadMore = useCallback(async () => {
-
-        if (!sec || isLoadingMore || start_index == prev_start_index) return
         setIsLoadingMore(true)
+        if (!sec || isLoadingMoreRef.current || start_index == prev_start_index) {
+            setTimeout(() => {
+                setIsLoadingMore(false);
+            }, 150);
+            return
+        }
+
         try {
             const res = await api.get(`/market/chart2/${sec.ticker}`, {
                 params: {
@@ -302,16 +365,14 @@ export default function Security() {
             })
             const newCandles = (await res).data.candles as Candle[]
 
-           
             const seen = new Set<string | number>()
             const unique = newCandles.filter((c) => {
                 if (seen.has(c.date)) return false
                 seen.add(c.date)
                 return true
             })
-      
+
             if (!unique || unique.length === 0) {
-               
                 setPrevStartIndex(start_index) // Приравняет их, чтобы заблокировать дальнейшие запросы
                 return
             }
@@ -322,7 +383,10 @@ export default function Security() {
                 return nextIndex
             })
 
-            setCandles((prev) => [...unique, ...prev])
+            setCandles((prev) => {
+                const loaded = unique.filter((c) => !prev.some((p) => p.date === c.date))
+                return [...loaded, ...prev]
+            })
 
         } catch (e) {
             console.error('Ошибка догрузки свечей', e)
@@ -330,7 +394,7 @@ export default function Security() {
             setIsLoadingMore(false)
         }
 
-    }, [sec, tf, isLoadingMore, start_index, prev_start_index])
+    }, [sec, tf, start_index, prev_start_index])
 
     const up = (sec?.change_pct ?? 0) >= 0
 
