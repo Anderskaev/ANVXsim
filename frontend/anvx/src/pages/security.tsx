@@ -104,6 +104,9 @@ function CouponsBlock({ coupons, amortizations }: {
 }) {
     const hasCoupons = coupons?.length > 0
     const hasAmort = amortizations?.length > 0
+
+    console.log(hasCoupons)
+
     if (!hasCoupons && !hasAmort) return null
 
     return (
@@ -121,7 +124,7 @@ function CouponsBlock({ coupons, amortizations }: {
             )}
             {hasAmort && (
                 <div className="space-y-2">
-                    <p className="text-sm font-semibold">Амортизация</p>
+                    <p className="text-sm font-semibold">Амортизация/погашение</p>
                     {amortizations.map((a: { amort_date: string; amount: number | null }, i: Key | null | undefined) => (
                         <div key={i} className="flex justify-between text-sm">
                             <p className="text-muted-foreground">{fmtDate(a.amort_date)}</p>
@@ -337,7 +340,6 @@ export default function Security() {
         // Если данные в кэше или только пришли — записываем их
         if (ChartData?.candles) {
             setCandles(ChartData.candles)
-            console.log(ChartData.candles)
         } else {
             // Если данных еще нет (идет загрузка) — очищаем график
             setCandles([])

@@ -31,23 +31,93 @@ def fetch_dividends(ticker):
         return []
 
 
+# def fetch_coupons(ticker):
+#     url = (
+#         f'{ISS_BASE}/statistics/engines/stock/markets/bonds'
+#         f'/bondization/{ticker}.json'
+#     )
+#     try:
+#         r = requests.get(url, params={'iss.meta': 'off'}, timeout=15)
+#         r.raise_for_status()
+#         data    = r.json()
+#         columns = data['coupons']['columns']
+#         rows    = data['coupons']['data']
+#         amort_columns = data['amortizations']['columns']
+#         amort_rows    = data['amortizations']['data']        
+#         return [dict(zip(columns, row)) for row in rows], [dict(zip(amort_columns, row)) for row in amort_rows]
+#     except Exception as e:
+#         print(f'  Купоны и амортизации {ticker}: {e}')
+#         return []
+
 def fetch_coupons(ticker):
-    url = (
-        f'{ISS_BASE}/statistics/engines/stock/markets/bonds'
-        f'/bondization/{ticker}.json'
-    )
-    try:
-        r = requests.get(url, params={'iss.meta': 'off'}, timeout=15)
-        r.raise_for_status()
-        data    = r.json()
-        columns = data['coupons']['columns']
-        rows    = data['coupons']['data']
-        amort_columns = data['amortizations']['columns']
-        amort_rows    = data['amortizations']['data']        
-        return [dict(zip(columns, row)) for row in rows], [dict(zip(amort_columns, row)) for row in amort_rows]
-    except Exception as e:
-        print(f'  Купоны и амортизации {ticker}: {e}')
-        return []
+    # Словари для накопления уникальных результатов (ключ — дата выплаты)
+    all_coupons = {}
+    all_amortizations = {}
+    
+    # 1. Цикл для сбора ВСЕХ купонов
+    start_coupons = 0
+    while True:
+        url = f'{ISS_BASE}/statistics/engines/stock/markets/bonds/bondization/{ticker}.json'
+        params = {
+            'iss.meta': 'off',
+            'iss.only': 'coupons',      # Просим только купоны, чтобы не дублировать трафик
+            'coupons.start': start_coupons
+        }
+        try:
+            r = requests.get(url, params=params, timeout=15)
+            r.raise_for_status()
+            data = r.json()
+            
+            columns = data['coupons']['columns']
+            rows = data['coupons']['data']
+            
+            if not rows:  # Если данных больше нет — выходим из цикла
+                break
+                
+            for row in rows:
+                item = dict(zip(columns, row))
+                # Записываем в словарь, используя дату как уникальный ключ
+                all_coupons[item['coupondate']] = item
+                
+            start_coupons += len(rows)
+        except Exception as e:
+            print(f' Ошибка при загрузке купонов {ticker} (start={start_coupons}): {e}')
+            break
+
+    # 2. Цикл для сбора ВСЕХ амортизаций
+    start_amort = 0
+    while True:
+        url = f'{ISS_BASE}/statistics/engines/stock/markets/bonds/bondization/{ticker}.json'
+        params = {
+            'iss.meta': 'off',
+            'iss.only': 'amortizations', # Просим только амортизации
+            'amortizations.start': start_amort
+        }
+        try:
+            r = requests.get(url, params=params, timeout=15)
+            r.raise_for_status()
+            data = r.json()
+            
+            amort_columns = data['amortizations']['columns']
+            amort_rows = data['amortizations']['data']
+            
+            if not amort_rows:  # Если данных больше нет — выходим из цикла
+                break
+                
+            for row in amort_rows:
+                item = dict(zip(amort_columns, row))
+                all_amortizations[item['amortdate']] = item
+                
+            start_amort += len(amort_rows)
+        except Exception as e:
+            print(f' Ошибка при загрузке амортизаций {ticker} (start={start_amort}): {e}')
+            break
+
+    # Сортируем списки по датам перед возвратом
+    sorted_coupons = [all_coupons[k] for k in sorted(all_coupons.keys())]
+    sorted_amorts = [all_amortizations[k] for k in sorted(all_amortizations.keys())]
+
+    return sorted_coupons, sorted_amorts
 
 # def fetch_ammortizations(ticker):
 #     url = (
@@ -77,6 +147,7 @@ with app.app_context():
         iter_start = time.time()
         rows, amort = fetch_coupons(sec.ticker)
         #amort = fetch_ammortizations(sec.ticker)
+        print(rows)
         amort_count = 0
         count      = 0
 
