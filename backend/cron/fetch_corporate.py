@@ -4,10 +4,11 @@
 
 import sys
 import os
+import time
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import requests
-import time
 from datetime import datetime, timezone
 from app import create_app, db
 from app.models import Security
@@ -17,10 +18,11 @@ app = create_app()
 ISS_BASE = 'https://iss.moex.com/iss'
 
 
-def fetch_dividends(ticker):
+# Передаем объект сессии для экономии ресурсов CPU
+def fetch_dividends(session, ticker):
     url = f'{ISS_BASE}/securities/{ticker}/dividends.json'
     try:
-        r = requests.get(url, params={'iss.meta': 'off'}, timeout=15)
+        r = session.get(url, params={'iss.meta': 'off'}, timeout=15)
         r.raise_for_status()
         data    = r.json()
         columns = data['dividends']['columns']
@@ -30,10 +32,11 @@ def fetch_dividends(ticker):
         print(f'  Дивиденды {ticker}: {e}')
         return []
 
-def fetch_coupons(ticker):
+# Передаем объект сессии и оптимизируем циклы пагинации
+def fetch_coupons(session, ticker):
     all_coupons = {}
     all_amortizations = {}
-    
+   
     # 1. Цикл для сбора ВСЕХ купонов
     start_coupons = 0
     while True:
@@ -44,7 +47,7 @@ def fetch_coupons(ticker):
             'coupons.start': start_coupons
         }
         try:
-            r = requests.get(url, params=params, timeout=15)
+            r = session.get(url, params=params, timeout=15)
             r.raise_for_status()
             data = r.json()
             
@@ -58,7 +61,13 @@ def fetch_coupons(ticker):
                 item = dict(zip(columns, row))
                 all_coupons[item['coupondate']] = item
                 
+            # УМНЫЙ ВЫХОД: Если записей меньше 20, это последняя страница. 
+            # Холостой пустой запрос делать не нужно.
+            if len(rows) < 20:
+                break
+                
             start_coupons += len(rows)
+            time.sleep(0.02) # Микропауза для разгрузки процессора хостинга
         except Exception as e:
             print(f' Ошибка при загрузке купонов {ticker} (start={start_coupons}): {e}')
             break
@@ -73,7 +82,7 @@ def fetch_coupons(ticker):
             'amortizations.start': start_amort
         }
         try:
-            r = requests.get(url, params=params, timeout=15)
+            r = session.get(url, params=params, timeout=15)
             r.raise_for_status()
             data = r.json()
             
@@ -87,7 +96,12 @@ def fetch_coupons(ticker):
                 item = dict(zip(amort_columns, row))
                 all_amortizations[item['amortdate']] = item
                 
+            # УМНЫЙ ВЫХОД: Если амортизаций мало, выходим из цикла сразу
+            if len(amort_rows) < 20:
+                break
+                
             start_amort += len(amort_rows)
+            time.sleep(0.02)
         except Exception as e:
             print(f' Ошибка при загрузке амортизаций {ticker} (start={start_amort}): {e}')
             break
@@ -100,135 +114,141 @@ def fetch_coupons(ticker):
 
 with app.app_context():
     start_time = time.time()
+    cpu_start = time.process_time()
+    wall_start = time.time()    
 
-    # ── БЛОК 1: КУПОНЫ И АМОРТИЗАЦИИ (ОБЛИГАЦИИ) ─────────────────
-    bonds = Security.query.filter_by(is_active=True, type='bond').all()
-    print(f'\nКупоны и амортизации: {len(bonds)} облигаций')
+    # Создаем единую сессию для всех сетевых запросов скрипта
+    with requests.Session() as session:
 
-    bulk_amortizations = []
-    bulk_coupons = []
+        # ── БЛОК 1: КУПОНЫ И АМОРТИЗАЦИИ (ОБЛИГАЦИИ) ─────────────────
+        bonds = Security.query.filter_by(is_active=True, type='bond').all()
+        print(f'\nКупоны и амортизации: {len(bonds)} облигаций')
 
-    for i, sec in enumerate(bonds, 1):
-        iter_start = time.time()
-        rows, amort = fetch_coupons(sec.ticker)
+        bulk_amortizations = []
+        bulk_coupons = []
+
+        for i, sec in enumerate(bonds, 1):
+            iter_start = time.time()
+            rows, amort = fetch_coupons(session, sec.ticker)
+            
+            for a in amort:
+                if not a.get('amortdate') or not a.get('value_rub'):
+                    continue
+                bulk_amortizations.append({
+                    'ticker':     sec.ticker,
+                    'amort_date': a['amortdate'],
+                    'amount':      a['value_rub'],
+                    'currency':    a.get('currencyid') or 'RUB',
+                })
+      
+            for c in rows:
+                if not c.get('coupondate') or not c.get('value_rub'):
+                    continue
+                bulk_coupons.append({
+                    'ticker':      sec.ticker,
+                    'coupon_date': c['coupondate'],
+                    'amount':      c['value_rub'],
+                    'currency':    c.get('currencyid') or 'RUB',
+                })
+
+            elapsed = time.time() - iter_start
+            print(f'[{i}/{len(bonds)}] {sec.ticker} | Собран {len(rows)} куп. / {len(amort)} аморт. | {elapsed:.1f}с')
+            time.sleep(0.3)
+
+        if bulk_amortizations:
+            print(f'\nЗапись {len(bulk_amortizations)} амортизаций в БД...')
+            try:
+                db.session.execute(
+                    db.text("""
+                        INSERT INTO amortizations (ticker, amort_date, amount, currency)
+                        VALUES (:ticker, :amort_date, :amount, :currency)
+                        ON DUPLICATE KEY UPDATE
+                            amount   = VALUES(amount),
+                            currency = VALUES(currency)
+                    """),
+                    bulk_amortizations
+                )
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print(f'  Ошибка массовой записи амортизаций: {e}')
+
+        if bulk_coupons:
+            print(f'Запись {len(bulk_coupons)} купонов в БД...')
+            try:
+                db.session.execute(
+                    db.text("""
+                        INSERT INTO coupons (ticker, coupon_date, amount, currency)
+                        VALUES (:ticker, :coupon_date, :amount, :currency)
+                        ON DUPLICATE KEY UPDATE
+                            amount   = VALUES(amount),
+                            currency = VALUES(currency)
+                    """),
+                    bulk_coupons
+                )
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print(f'  Ошибка массовой записи купонов: {e}')
+
+        db.session.remove()
+        print(f'Блок облигаций завершен за {time.time() - start_time:.0f}с')
+
+
+        # ── БЛОК 2: ДИВИДЕНДЫ (АКЦИИ) ─────────────────────────────────
+        shares = Security.query.filter_by(is_active=True, type='share').all()
+        print(f'\nДивиденды: {len(shares)} акций')
+
+        bulk_dividends = []
+        shares_start_time = time.time()
+
+        for i, sec in enumerate(shares, 1):
+            iter_start = time.time()
+            rows       = fetch_dividends(session, sec.ticker)
+
+            for d in rows:
+                if not d.get('registryclosedate') or not d.get('value'):
+                    continue
+                bulk_dividends.append({
+                    'ticker':        sec.ticker,
+                    'registry_date': d['registryclosedate'],
+                    'payment_date':  d.get('paymentdate'),
+                    'amount':        d['value'],
+                    'currency':      d.get('currencyid') or 'RUB',
+                })
+
+            elapsed = time.time() - iter_start
+            print(f'[{i}/{len(shares)}] {sec.ticker} | Собран {len(rows)} див. | {elapsed:.1f}с')
+            time.sleep(0.3)
+
+        if bulk_dividends:
+            print(f'\nЗапись {len(bulk_dividends)} дивидендов в БД...')
+            try:
+                db.session.execute(
+                    db.text("""
+                        INSERT INTO dividends (ticker, registry_date, payment_date, amount, currency)
+                        VALUES (:ticker, :registry_date, :payment_date, :amount, :currency)
+                        ON DUPLICATE KEY UPDATE
+                            payment_date = VALUES(payment_date),
+                            amount       = VALUES(amount),
+                            currency     = VALUES(currency)
+                    """),
+                    bulk_dividends
+                )
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print(f'  Ошибка массовой записи дивидендов: {e}')
         
-        # Сбор амортизаций в память
-        for a in amort:
-            if not a.get('amortdate') or not a.get('value_rub'):
-                continue
-            bulk_amortizations.append({
-                'ticker':     sec.ticker,
-                'amort_date': a['amortdate'],
-                'amount':      a['value_rub'],
-                'currency':    a.get('currencyid') or 'RUB',
-            })
-  
-        # Сбор купонов в память
-        for c in rows:
-            if not c.get('coupondate') or not c.get('value_rub'):
-                continue
-            bulk_coupons.append({
-                'ticker':      sec.ticker,
-                'coupon_date': c['coupondate'],
-                'amount':      c['value_rub'],
-                'currency':    c.get('currencyid') or 'RUB',
-            })
+        db.session.remove()
 
-        elapsed = time.time() - iter_start
-        print(f'[{i}/{len(bonds)}] {sec.ticker} | Собран {len(rows)} куп. / {len(amort)} аморт. | {elapsed:.1f}с')
-        time.sleep(0.3)
-
-    # Массовый Upsert амортизаций
-    if bulk_amortizations:
-        print(f'\nЗапись {len(bulk_amortizations)} амортизаций в БД...')
-        try:
-            db.session.execute(
-                db.text("""
-                    INSERT INTO amortizations (ticker, amort_date, amount, currency)
-                    VALUES (:ticker, :amort_date, :amount, :currency)
-                    ON DUPLICATE KEY UPDATE
-                        amount   = VALUES(amount),
-                        currency = VALUES(currency)
-                """),
-                bulk_amortizations
-            )
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            print(f'  Ошибка массовой записи амортизаций: {e}')
-
-    # Массовый Upsert купонов
-    if bulk_coupons:
-        print(f'Запись {len(bulk_coupons)} купонов в БД...')
-        try:
-            db.session.execute(
-                db.text("""
-                    INSERT INTO coupons (ticker, coupon_date, amount, currency)
-                    VALUES (:ticker, :coupon_date, :amount, :currency)
-                    ON DUPLICATE KEY UPDATE
-                        amount   = VALUES(amount),
-                        currency = VALUES(currency)
-                """),
-                bulk_coupons
-            )
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            print(f'  Ошибка массовой записи купонов: {e}')
-
-    db.session.remove()
-    print(f'Блок облигаций завершен за {time.time() - start_time:.0f}с')
-
-
-    # ── БЛОК 2: ДИВИДЕНДЫ (АКЦИИ) ─────────────────────────────────
-    shares = Security.query.filter_by(is_active=True, type='share').all()
-    print(f'\nДивиденды: {len(shares)} акций')
-
-    bulk_dividends = []
-    shares_start_time = time.time()
-
-    for i, sec in enumerate(shares, 1):
-        iter_start = time.time()
-        rows       = fetch_dividends(sec.ticker)
-
-        # Сбор дивидендов в память
-        for d in rows:
-            if not d.get('registryclosedate') or not d.get('value'):
-                continue
-            bulk_dividends.append({
-                'ticker':        sec.ticker,
-                'registry_date': d['registryclosedate'],
-                'payment_date':  d.get('paymentdate'),
-                'amount':        d['value'],
-                'currency':      d.get('currencyid') or 'RUB',
-            })
-
-        elapsed = time.time() - iter_start
-        print(f'[{i}/{len(shares)}] {sec.ticker} | Собран {len(rows)} див. | {elapsed:.1f}с')
-        time.sleep(0.3)
-
-    # Массовый Upsert дивидендов (Вместо индивидуальных коммитов в цикле)
-    if bulk_dividends:
-        print(f'\nЗапись {len(bulk_dividends)} дивидендов в БД...')
-        try:
-            db.session.execute(
-                db.text("""
-                    INSERT INTO dividends (ticker, registry_date, payment_date, amount, currency)
-                    VALUES (:ticker, :registry_date, :payment_date, :amount, :currency)
-                    ON DUPLICATE KEY UPDATE
-                        payment_date = VALUES(payment_date),
-                        amount       = VALUES(amount),
-                        currency     = VALUES(currency)
-                """),
-                bulk_dividends
-            )
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            print(f'  Ошибка массовой записи дивидендов: {e}')
-
-    db.session.remove()
     print(f'Блок акций завершен за {time.time() - shares_start_time:.0f}с')
+    print(f'\n[{datetime.now(timezone.utc)}] fetch_corporate: OK')
 
-    # Финальный лог с исправленным datetime.now(timezone.utc)
-    print(f'\n[{datetime.now(timezone.utc)}] fetch_corporate: OK | всего {time.time() - start_time:.0f}с')
+    cpu_h = time.process_time() - cpu_start
+    wall_h = time.time() - wall_start
+    load_pct = (cpu_h / wall_h * 100) if wall_h > 0 else 0
+
+    print(f"Затрачено CPU: {cpu_h:.3f} секунд")
+    print(f"Прошло реального времени: {wall_h:.1f} секунд")
+    print(f"Средняя нагрузка на ядро CPU за время работы: {load_pct:.1f}%")
