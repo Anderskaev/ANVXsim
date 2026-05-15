@@ -5,6 +5,8 @@
 
 import sys
 import os
+import time
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import requests
@@ -128,6 +130,9 @@ def process_board(data, sec_type, board):
         lp.fetched_at = now_utc
 
 with app.app_context():
+    cpu_start = time.process_time()
+    wall_start = time.time()  # реальное время для сравнения
+
     for engine, market, board, sec_type in BOARDS:
         data, sec_type = fetch_board(engine, market, board, sec_type)
         process_board(data, sec_type, board)
@@ -144,3 +149,9 @@ with app.app_context():
 
             # И ТУТ:
             print(f'[{datetime.now(timezone.utc)}] Board {board}: ОШИБКА {e}')
+
+    cpu_h = time.process_time() - cpu_start
+    wall_h = time.time() - wall_start
+
+    load_pct = (cpu_h / wall_h * 100) if wall_h > 0 else 0
+    print(f"Средняя нагрузка на ядро CPU за время работы: {load_pct:.1f}%")            
