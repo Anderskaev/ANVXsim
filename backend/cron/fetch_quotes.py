@@ -36,7 +36,7 @@ def fetch_board(engine, market, board, sec_type):
     params = {
         'iss.meta':           'off',
         'iss.only':           'securities,marketdata',
-        'securities.columns': 'SECID,SHORTNAME,SECNAME,LOTSIZE,ISIN,CURRENCYID,STATUS,SECTYPE,PREVPRICE',
+        'securities.columns': 'SECID,SHORTNAME,SECNAME,LOTSIZE,ISIN,CURRENCYID,STATUS,SECTYPE,PREVPRICE,FACEVALUE',
         'marketdata.columns': 'SECID,LAST,OPEN,HIGH,LOW,VOLTODAY,LASTTOPREVPRICE,CHANGE',
     }
     try:
@@ -48,7 +48,7 @@ def fetch_board(engine, market, board, sec_type):
         return None, sec_type
     
 
-def process_board_bulk(data, board, now_utc):
+def process_board_bulk(data, board, now_utc, sec_type):
     if not data:
         return [], []
 
@@ -66,11 +66,16 @@ def process_board_bulk(data, board, now_utc):
         ticker = s['SECID']
         md = md_map.get(ticker, {})
 
+        if s.get('FACEUNIT', '').lower() != 'sur':
+            continue
+
         price = md.get('LAST')
         if not price:
             price = s.get('PREVPRICE')
             if not price:
                 continue
+        if sec_type == 'bond':
+            price = price * s.get('FACEVALUE', 1)/100
 
         # Просто собираем данные в плоский список (0% нагрузки на CPU)
         sec_bulk.append({
@@ -80,7 +85,7 @@ def process_board_bulk(data, board, now_utc):
             'board':      board,
             'lot_size':   int(s.get('LOTSIZE') or 1),
             'isin':       s.get('ISIN'),
-            'currency':   s.get('CURRENCYID') or 'RUB',
+            'currency':   s.get('FACEUNIT') or 'UNK',
             'type':       SECTYPE_MAP.get(str(s.get('SECTYPE', "0")).upper(), "other"),
             'is_active':  1 if s.get('STATUS') == 'A' else 0,
             'updated_at': now_utc
@@ -117,7 +122,7 @@ with app.app_context():
             params = {
                 'iss.meta':           'off',
                 'iss.only':           'securities,marketdata',
-                'securities.columns': 'SECID,SHORTNAME,SECNAME,LOTSIZE,ISIN,CURRENCYID,STATUS,SECTYPE,PREVPRICE',
+                'securities.columns': 'SECID,SHORTNAME,SECNAME,LOTSIZE,ISIN,CURRENCYID,STATUS,SECTYPE,PREVPRICE,FACEVALUE,FACEUNIT',
                 'marketdata.columns': 'SECID,LAST,OPEN,HIGH,LOW,VOLTODAY,LASTTOPREVPRICE,CHANGE',
             }
             try:
@@ -129,7 +134,7 @@ with app.app_context():
                 data = None
 
             if data:
-                sec_list, price_list = process_board_bulk(data, board, now_utc)
+                sec_list, price_list = process_board_bulk(data, board, now_utc, sec_type)
                 all_securities.extend(sec_list)
                 all_prices.extend(price_list)
 

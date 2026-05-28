@@ -6,8 +6,6 @@ import requests
 from datetime import date, timedelta
 from itertools import groupby
 from datetime import datetime, timedelta, timezone
-import os
-import time
 
 from requests_ratelimiter import LimiterSession
 

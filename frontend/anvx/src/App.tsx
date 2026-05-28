@@ -1,6 +1,9 @@
 //import { AuthLayout } from "./layouts/auth-layout"
 import { Login } from "./pages/login"
 import { Register } from "./pages/register"
+import { PortfolioComp } from "./pages/portfolio"
+import { History } from "./pages/history"
+
 import { AppLayout } from "./layouts/app-layout"
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
@@ -96,8 +99,8 @@ export function App() {
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route path="/market" element={<Market />} />
           <Route path="/market/:ticker" element={<Security />} />
-         {/* <Route path="/portfolio" element={<Portfolio />} />
-          <Route path="/history" element={<History />} /> */}
+          <Route path="/portfolio" element={<PortfolioComp />} />
+          <Route path="/history" element={<History />} /> 
         </Route>
 
         <Route path="*" element={<Navigate to="/market" replace />} />
