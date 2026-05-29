@@ -65,9 +65,10 @@ def trade():
 
     # цена исполнения со спредом
     base_price = float(lp.price)
+    coupon = float(lp.coupon)
     exec_price = base_price * (1 + SPREAD) if direction == 'buy' else base_price * (1 - SPREAD)
-    subtotal   = exec_price * quantity
-    commission = subtotal * COMMISSION
+    subtotal   = (exec_price + coupon) * quantity
+    commission = exec_price * quantity * COMMISSION
     total      = subtotal + commission if direction == 'buy' else subtotal - commission
 
     # портфель
@@ -134,6 +135,7 @@ def trade():
             quantity=quantity,
             price=exec_price,
             commission=commission,
+            coupon=coupon,
             total=total,
         )
         db.session.add(trade_record)

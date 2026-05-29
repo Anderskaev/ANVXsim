@@ -40,7 +40,8 @@ def portfolio():
         sec         = sec_map.get(pos.ticker)
         # fallback на avg_price если нет last_price
         cur_price   = float(lp.price) if lp else float(pos.avg_price)
-        pos_value   = cur_price * pos.quantity
+        coupon = float(lp.coupon) if lp else 0
+        pos_value   = (cur_price + coupon) * pos.quantity
         total_pos_value += pos_value
 
         positions_data.append({

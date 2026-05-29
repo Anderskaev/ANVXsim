@@ -60,7 +60,7 @@ function PositionBlock({ ticker, price }: { ticker: string; price: number | null
                 <div>
                     <p className="text-muted-foreground text-xs">P&L</p>
                     <p className={`font-semibold ${positive ? 'text-green-500' : 'text-red-500'}`}>
-                        {positive ? '+' : ''}{fmt(pnl, 0)} ₽
+                        {positive ? '+' : ''}{fmt(pnl)} ₽
                     </p>
                     <p className={`text-xs ${positive ? 'text-green-500' : 'text-red-500'}`}>
                         {positive ? '+' : ''}{fmt(pnlPct)}%
@@ -98,19 +98,29 @@ function DividendsBlock({ dividends }: { dividends: Dividend[] }) {
 
 // ── COUPONS BLOCK ─────────────────────────────────────────────────────────────
 
-function CouponsBlock({ coupons, amortizations }: {
+function CouponsBlock({ coupons, amortizations, coupon }: {
     coupons: Coupon[]
     amortizations: Amortization[]
+    coupon: number
 }) {
     const hasCoupons = coupons?.length > 0
     const hasAmort = amortizations?.length > 0
+    const hasCoupon = (coupon > 0)
 
-    console.log(hasCoupons)
 
     if (!hasCoupons && !hasAmort) return null
 
     return (
         <div className="rounded-lg border p-4 space-y-4">
+            {hasCoupon && (
+                <div className="space-y-2">
+                    <p className="text-sm font-semibold">НКД</p>
+                    <div className="flex justify-between text-sm">
+                        <p className="text-muted-foreground">{fmtDate(Date())}</p>
+                        <p className="font-medium">{fmt(coupon)} ₽</p>
+                    </div>
+                </div>
+            )}
             {hasCoupons && (
                 <div className="space-y-2">
                     <p className="text-sm font-semibold">Купоны</p>
@@ -143,12 +153,12 @@ const toDate = (time: Time): Date => {
         // Заменяем пробел на T чтобы парсилось корректно, добавляем Z если нет таймзоны
         return new Date(time.replace(' ', 'T') + (time.includes('+') ? '' : 'Z'));
     }
-    
+
     // BusinessDay { year, month, day }
     if (typeof time === 'object') {
         return new Date(Date.UTC(time.year, time.month - 1, time.day));
     }
-    
+
     // Unix timestamp (number)
     return new Date(time * 1000);
 };
@@ -521,7 +531,7 @@ export default function Security() {
                 <DividendsBlock dividends={sec.dividends} />
             )}
             {sec.type === 'bond' && (
-                <CouponsBlock coupons={sec.coupons} amortizations={sec.amortizations} />
+                <CouponsBlock coupons={sec.coupons} amortizations={sec.amortizations} coupon={sec.coupon ?? 0} />
             )}
 
             {/* trade modal */}

@@ -58,6 +58,7 @@ class LastPrice(db.Model):
     high       = db.Column(db.Numeric(18, 4),  nullable=True)
     low        = db.Column(db.Numeric(18, 4),  nullable=True)
     volume     = db.Column(db.BigInteger,       nullable=True)
+    coupon     = db.Column(db.Numeric(18,4), nullable=False, default=0)
     change_pct = db.Column(db.Numeric(8, 4),   nullable=True)
     fetched_at = db.Column(db.DateTime,         nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -69,6 +70,7 @@ class LastPrice(db.Model):
             'high':       float(self.high)       if self.high       else None,
             'low':        float(self.low)        if self.low        else None,
             'volume':     self.volume,
+            'coupon':     float(self.coupon),
             'change_pct': float(self.change_pct) if self.change_pct else None,
             'fetched_at': self.fetched_at.isoformat(),
         }
@@ -311,6 +313,7 @@ class Trade(db.Model):
     direction    = db.Column(db.Enum('buy', 'sell'), nullable=False)
     quantity     = db.Column(db.Integer,        nullable=False)
     price        = db.Column(db.Numeric(18, 4), nullable=False)
+    coupon       = db.Column(db.Numeric(18, 4), nullable=False, default=0)
     commission   = db.Column(db.Numeric(18, 4), nullable=False, default=0)
     total        = db.Column(db.Numeric(18, 2), nullable=False)
     executed_at  = db.Column(db.DateTime,       nullable=False, default=datetime.utcnow)
@@ -322,6 +325,7 @@ class Trade(db.Model):
             'direction':   self.direction,
             'quantity':    self.quantity,
             'price':       float(self.price),
+            'coupon':      float(self.coupon),
             'commission':  float(self.commission),
             'total':       float(self.total),
             'executed_at': self.executed_at.isoformat(),

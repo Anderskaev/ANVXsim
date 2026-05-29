@@ -177,7 +177,7 @@ function PositionsTable({ positions, onRowClick }: {
               <TableCell className="text-right font-mono">{fmt(pos.avg_price)}</TableCell>
               <TableCell className="text-right font-mono">{fmt(pos.current_price)}</TableCell>
               <TableCell className={`text-right font-mono font-medium ${positive ? 'text-green-500' : 'text-red-500'}`}>
-                {positive ? '+' : ''}{fmt(pos.pnl, 0)}
+                {positive ? '+' : ''}{fmt(pos.pnl)}
               </TableCell>
               <TableCell className={`text-right ${positive ? 'text-green-500' : 'text-red-500'}`}>
                 <Badge
@@ -188,7 +188,7 @@ function PositionsTable({ positions, onRowClick }: {
                 </Badge>
               </TableCell>
               <TableCell className="text-right font-mono">
-                {fmt(pos.value, 0)} ₽
+                {fmt(pos.value)} ₽
               </TableCell>
             </TableRow>
           )
@@ -235,7 +235,7 @@ function PositionsMobile({ positions, onRowClick }: {
               </p>
             </div>
             <div className="text-right shrink-0 ml-4 space-y-1">
-              <p className="font-mono text-sm font-medium">{fmt(pos.value, 0)} ₽</p>
+              <p className="font-mono text-sm font-medium">{fmt(pos.value)} ₽</p>
               <Badge
                 variant={positive ? 'default' : 'destructive'}
                 className={positive ? 'bg-green-500/15 text-green-600 hover:bg-green-500/15' : ''}
@@ -290,20 +290,20 @@ export function PortfolioComp() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           label="Стоимость"
-          value={`₽ ${fmt(total_value, 0)}`}
+          value={`₽ ${fmt(total_value)}`}
         />
         <StatCard
           label="Позиции"
-          value={`₽ ${fmt(pos_value, 0)}`}
+          value={`₽ ${fmt(pos_value)}`}
         />
         <StatCard
           label="Свободно"
-          value={`₽ ${fmt(portfolio.cash, 0)}`}
+          value={`₽ ${fmt(portfolio.cash)}`}
           positive={true}
         />
         <StatCard
           label="P&L"
-          value={`${positive ? '+' : ''}₽ ${fmt(total_pnl, 0)}`}
+          value={`${positive ? '+' : ''}₽ ${fmt(total_pnl, 2)}`}
           sub={`${positive ? '+' : ''}${fmt(roi)}%`}
           positive={positive}
         />

@@ -18,14 +18,14 @@ import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface TradeModalProps {
-  open:      boolean
-  onClose:   () => void
-  security:  SecurityDetail
+  open: boolean
+  onClose: () => void
+  security: SecurityDetail
   position?: Position
   initialSide?: 'buy' | 'sell'
 }
 
-const SPREAD     = 0.001
+const SPREAD = 0.001
 const COMMISSION = 0.001
 
 const fmt = (n: number) =>
@@ -40,8 +40,8 @@ export function TradeModal({
 }: TradeModalProps) {
   const queryClient = useQueryClient()
 
-  const [side, setSide]   = useState<'buy' | 'sell'>(initialSide)
-  const [lots, setLots]   = useState(1)
+  const [side, setSide] = useState<'buy' | 'sell'>(initialSide)
+  const [lots, setLots] = useState(1)
   const [error, setError] = useState<string | null>(null)
 
   // сбрасываем при открытии
@@ -53,12 +53,13 @@ export function TradeModal({
     }
   }, [open, initialSide])
 
-  const price    = security.price ?? 0
-  const execPrice = side === 'buy' ? price * (1 + SPREAD) : price * (1 - SPREAD)
-  const shares    = lots * security.lot_size
-  const subtotal  = execPrice * shares
-  const commission = subtotal * COMMISSION
-  const total      = side === 'buy' ? subtotal + commission : subtotal - commission
+  const price = security.price ?? 0
+  const coupon = security.coupon ?? 0
+  const execPrice = side === 'buy' ? (price) * (1 + SPREAD) : (price) * (1 - SPREAD)
+  const shares = lots * security.lot_size
+  const subtotal = (execPrice + coupon) * shares
+  const commission = execPrice * shares * COMMISSION
+  const total = side === 'buy' ? subtotal + commission : subtotal - commission
 
   const maxLots = position
     ? Math.floor(position.quantity / security.lot_size)
@@ -66,9 +67,9 @@ export function TradeModal({
 
   const mutation = useMutation({
     mutationFn: () => api.post('/trade', {
-      ticker:    security.ticker,
+      ticker: security.ticker,
       direction: side,
-      quantity:  shares,
+      quantity: shares,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['portfolio'] })
@@ -144,9 +145,19 @@ export function TradeModal({
               <span className="text-muted-foreground">Цена исполнения</span>
               <span>{fmt(execPrice)} ₽</span>
             </div>
+            {coupon && (<div className="flex justify-between">
+              <span className="text-muted-foreground">НКД</span>
+              <span>+{fmt(coupon)} ₽</span>
+            </div>)}
+
             <div className="flex justify-between">
               <span className="text-muted-foreground">Акций</span>
               <span>{shares} шт.</span>
+            </div>
+
+
+
+            <div>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Спред (0.1%)</span>

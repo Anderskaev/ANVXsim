@@ -64,9 +64,12 @@ def create_app():
     @app.route('/api/migrate/secretkey')
     def create_migration():
         try:
-            from flask_migrate import upgrade
+            #from flask_migrate import upgrade
+            from flask_migrate import migrate as flask_migrate_cmd
+            from flask_migrate import upgrade as flask_upgrade_cmd
             # Генерируем файл миграции
-            upgrade()
+            #flask_migrate_cmd(message="auto upgrade")
+            flask_upgrade_cmd()
             
             return {
                 "status": "success", 

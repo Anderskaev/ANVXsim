@@ -164,6 +164,7 @@ def security(ticker):
         result['high']       = float(lp.high)       if lp.high       else None
         result['low']        = float(lp.low)        if lp.low        else None
         result['volume']     = lp.volume
+        result['coupon']     = float(lp.coupon)     if sec.type == 'bond' else None
         result['change_pct'] = float(lp.change_pct) if lp.change_pct is not None else None
         result['fetched_at'] = lp.fetched_at.isoformat()
     else:

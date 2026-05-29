@@ -34,6 +34,7 @@ export interface SecurityDetail {
     high: number | null
     low: number | null
     volume: number | null
+    coupon: number | null
     change_pct: number | null
     fetched_at: string | null
     dividends: Dividend[]

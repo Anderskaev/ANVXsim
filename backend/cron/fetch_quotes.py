@@ -31,21 +31,21 @@ SECTYPE_MAP = {
 }
 
 
-def fetch_board(engine, market, board, sec_type):
-    url = f'{ISS_BASE}/engines/{engine}/markets/{market}/boards/{board}/securities.json'
-    params = {
-        'iss.meta':           'off',
-        'iss.only':           'securities,marketdata',
-        'securities.columns': 'SECID,SHORTNAME,SECNAME,LOTSIZE,ISIN,CURRENCYID,STATUS,SECTYPE,PREVPRICE,FACEVALUE',
-        'marketdata.columns': 'SECID,LAST,OPEN,HIGH,LOW,VOLTODAY,LASTTOPREVPRICE,CHANGE',
-    }
-    try:
-        r = requests.get(url, params=params, timeout=15)
-        r.raise_for_status()
-        return r.json(), sec_type
-    except Exception as e:
-        print(f'Ошибка запроса {board}: {e}')
-        return None, sec_type
+# def fetch_board1(engine, market, board, sec_type):
+#     url = f'{ISS_BASE}/engines/{engine}/markets/{market}/boards/{board}/securities.json'
+#     params = {
+#         'iss.meta':           'off',
+#         'iss.only':           'securities,marketdata',
+#         'securities.columns': 'SECID,SHORTNAME,SECNAME,LOTSIZE,ISIN,CURRENCYID,STATUS,SECTYPE,PREVPRICE,FACEVALUE,ACCRUEDINT',
+#         'marketdata.columns': 'SECID,LAST,OPEN,HIGH,LOW,VOLTODAY,LASTTOPREVPRICE,CHANGE',
+#     }
+#     try:
+#         r = requests.get(url, params=params, timeout=15)
+#         r.raise_for_status()
+#         return r.json(), sec_type
+#     except Exception as e:
+#         print(f'Ошибка запроса {board}: {e}')
+#         return None, sec_type
     
 
 def process_board_bulk(data, board, now_utc, sec_type):
@@ -98,6 +98,7 @@ def process_board_bulk(data, board, now_utc, sec_type):
             'high':       md.get('HIGH'),
             'low':        md.get('LOW'),
             'volume':     md.get('VOLTODAY'),
+            'coupon':     s.get('ACCRUEDINT', 0),
             'change_pct': md.get('LASTTOPREVPRICE'),
             'fetched_at': now_utc
         })
@@ -122,7 +123,7 @@ with app.app_context():
             params = {
                 'iss.meta':           'off',
                 'iss.only':           'securities,marketdata',
-                'securities.columns': 'SECID,SHORTNAME,SECNAME,LOTSIZE,ISIN,CURRENCYID,STATUS,SECTYPE,PREVPRICE,FACEVALUE,FACEUNIT',
+                'securities.columns': 'SECID,SHORTNAME,SECNAME,LOTSIZE,ISIN,CURRENCYID,STATUS,SECTYPE,PREVPRICE,FACEVALUE,FACEUNIT,ACCRUEDINT',
                 'marketdata.columns': 'SECID,LAST,OPEN,HIGH,LOW,VOLTODAY,LASTTOPREVPRICE,CHANGE',
             }
             try:
@@ -165,8 +166,8 @@ with app.app_context():
 
             db.session.execute(
                 db.text("""
-                    INSERT INTO last_price (ticker, price, open, high, low, volume, change_pct, fetched_at)
-                    VALUES (:ticker, :price, :open, :high, :low, :volume, :change_pct, :fetched_at)
+                    INSERT INTO last_price (ticker, price, open, high, low, volume, change_pct, coupon, fetched_at)
+                    VALUES (:ticker, :price, :open, :high, :low, :volume, :change_pct, :coupon, :fetched_at)
                     ON DUPLICATE KEY UPDATE
                         price      = VALUES(price),
                         open       = VALUES(open),
@@ -174,6 +175,7 @@ with app.app_context():
                         low        = VALUES(low),
                         volume     = VALUES(volume),
                         change_pct = VALUES(change_pct),
+                        coupon = VALUES (coupon),
                         fetched_at = VALUES(fetched_at)
                 """),
                 all_prices
